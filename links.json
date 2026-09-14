@@ -1,0 +1,48 @@
+{
+  "name": "Jesse Brede",
+  "bio": "Building things at Lion's Share Digital.",
+  "avatar": "/avatar.svg",
+  "favicon": "",
+  "seoTitle": "",
+  "seoDescription": "",
+  "ogTitle": "",
+  "ogDescription": "",
+  "ogImage": "",
+  "accent": "#7c5cff",
+  "backgroundColor": "",
+  "sectionColor": "",
+  "contentBoxColor": "",
+  "googleAnalyticsId": "",
+  "googleAdsId": "",
+  "facebookPixelId": "",
+  "sections": [
+    {
+      "title": "Music",
+      "items": [
+        { "type": "video", "title": "Latest Release", "youtubeId": "dQw4w9WgXcQ" },
+        { "type": "link", "title": "Spotify", "url": "https://open.spotify.com/", "emoji": "🎵", "image": "", "slug": "spotify" },
+        { "type": "link", "title": "Apple Music", "url": "https://music.apple.com/", "emoji": "🍎", "image": "", "slug": "apple-music" }
+      ]
+    },
+    {
+      "title": "Links",
+      "items": [
+        { "type": "link", "title": "My Website", "url": "https://example.com", "emoji": "🌐", "image": "", "slug": "website" },
+        { "type": "link", "title": "Newsletter", "url": "https://example.com/newsletter", "emoji": "📬", "image": "", "slug": "newsletter" },
+        { "type": "link", "title": "Book a Call", "url": "https://cal.com/example", "emoji": "📅", "image": "", "slug": "call" }
+      ]
+    },
+    {
+      "title": "Follow",
+      "items": [
+        { "type": "link", "title": "X / Twitter", "url": "https://x.com/example", "emoji": "🐦", "image": "", "slug": "twitter" }
+      ]
+    }
+  ],
+  "socialLinks": [
+    { "icon": "spotify", "url": "https://open.spotify.com/", "slug": "social-spotify" },
+    { "icon": "instagram", "url": "https://instagram.com/example", "slug": "social-instagram" },
+    { "icon": "youtube", "url": "https://youtube.com/@example", "slug": "social-youtube" },
+    { "icon": "soundcloud", "url": "https://soundcloud.com/example", "slug": "social-soundcloud" }
+  ]
+}

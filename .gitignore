@@ -1,0 +1,4 @@
+node_modules/
+.env
+clicks.log
+public/og.png

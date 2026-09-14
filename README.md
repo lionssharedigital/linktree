@@ -12,9 +12,12 @@ or the Meta (Facebook) Pixel.
   colors, optional analytics IDs, and a `sections` array. Each section has a
   `title` (shown as a heading above it) and `items`, where each item is
   either:
-  - a **link**: `title`, `url`, and either an `emoji` or an `image` (path to
-    a thumbnail shown instead of the emoji), plus an auto-generated `slug`
-    used for click tracking, or
+  - a **link**: `title`, `url`, either an `emoji` or an `image` (path to a
+    thumbnail), a `style` (`"classic"` — small square thumbnail, whole row
+    clickable; or `"featured"` — large 16:9 image with the title below and a
+    gentle looping pulse animation, meant for your top 1–2 links; falls back
+    to classic if a featured item has no image), plus an auto-generated
+    `slug` used for click tracking, or
   - a **video**: `title` (caption) and `youtubeId`, rendered as an inline,
     click-to-play YouTube embed.
 
@@ -35,6 +38,24 @@ or the Meta (Facebook) Pixel.
   (avatar, bio, sections, social row) can render inside a colored card —
   Linktree's boxed-card look — by setting a content box color in `/admin`;
   leave it blank for the flat, no-box layout.
+- **Appearance options** in `/admin` (all optional, all default to the
+  existing look so nothing changes unless you opt in):
+  - **Avatar style**: circle (default, 96px) or hero — a large image at the
+    top that fades into the background via a CSS mask, with your name/bio
+    centered below it.
+  - **Sharp corners**: turns off `border-radius` on link buttons/cards only
+    (not the avatar, social icons, or content box) for a flat, editorial
+    look instead of the default rounded pills.
+  - Font stack leads with **Poppins**, falling back to the system font on
+    any device that doesn't have it installed — no external font request is
+    made, so this stays consistent with the zero-third-party-by-default
+    posture.
+- **Campaign tracking**: optional `utmSource`/`utmMedium`/`utmCampaign` in
+  `/admin` get appended as `utm_*` query params to every outbound link and
+  social-icon click at redirect time (`/go/:slug`), so link clicks show up
+  tagged in whatever analytics you're already using. A destination URL that
+  already sets one of those params keeps its own value — this only fills in
+  what's missing.
 - **Favicon**: falls back to the avatar if not set separately. Upload a
   dedicated favicon (PNG/ICO/SVG/WebP/JPG) in `/admin` if you want a
   different, simplified image for browser tabs.
@@ -221,3 +242,32 @@ Edit `STATS_USER`/`STATS_PASS` and/or `ADMIN_USER`/`ADMIN_PASS` in
 either rotate it with `logrotate` (it's a plain append-only text file, so
 standard rotation works) or periodically archive/prune it — nothing in the
 app depends on old entries staying in place.
+
+## Roadmap
+
+Built so far: sections, classic and featured link cards, YouTube video
+embeds, a social icon row, custom colors/fonts/corners, avatar/favicon/OG
+image uploads, SEO and social-preview overrides, optional Google/Meta
+analytics, and UTM campaign tagging on every outbound click.
+
+Not yet built (each needs a real design/provider decision before it's
+worth building, rather than a half-working stub):
+
+- **Horizontal carousel** — swipeable row of square cards (e.g. podcast
+  episodes)
+- **Rich embed link** — paste a Spotify/YouTube/SoundCloud URL and
+  auto-pull its title/thumbnail (oEmbed) with an inline player, instead of
+  manually filling in a title/thumbnail yourself
+- **Community link card** — a distinctly-styled Discord/Slack invite card
+- **Contact/booking form** — needs an outbound email provider decision
+  (SMTP relay? a transactional email API?) before it can actually notify
+  anyone
+- **Email / SMS signup blocks** — needs an ESP/Google Sheets integration
+  choice for email, and an SMS provider (e.g. Twilio) for phone — the
+  latter also has compliance requirements (TCPA consent language, opt-out
+  handling) worth getting right rather than shipping fast
+- **Shop preview strip** — a small teaser row linking out to a full shop
+  page
+
+("Section header + group" from that spec is already covered by the
+existing `sections` feature — a titled heading grouping a set of links.)

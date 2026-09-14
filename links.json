@@ -12,6 +12,11 @@
   "backgroundColor": "",
   "sectionColor": "",
   "contentBoxColor": "",
+  "sharpCorners": false,
+  "avatarStyle": "circle",
+  "utmSource": "",
+  "utmMedium": "",
+  "utmCampaign": "",
   "googleAnalyticsId": "",
   "googleAdsId": "",
   "facebookPixelId": "",
@@ -19,9 +24,10 @@
     {
       "title": "Music",
       "items": [
+        { "type": "link", "style": "featured", "title": "New Single: \"Latest Release\"", "url": "https://open.spotify.com/", "emoji": "", "image": "/featured-placeholder.svg", "slug": "new-single" },
         { "type": "video", "title": "Latest Release", "youtubeId": "dQw4w9WgXcQ" },
-        { "type": "link", "title": "Spotify", "url": "https://open.spotify.com/", "emoji": "🎵", "image": "", "slug": "spotify" },
-        { "type": "link", "title": "Apple Music", "url": "https://music.apple.com/", "emoji": "🍎", "image": "", "slug": "apple-music" }
+        { "type": "link", "style": "classic", "title": "Spotify", "url": "https://open.spotify.com/", "emoji": "🎵", "image": "", "slug": "spotify" },
+        { "type": "link", "style": "classic", "title": "Apple Music", "url": "https://music.apple.com/", "emoji": "🍎", "image": "", "slug": "apple-music" }
       ]
     },
     {

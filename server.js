@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { env } from './lib/env.js';
-import { loadLinks, findLink, saveLinks, flattenLinkItems, slugify, parseYoutubeId } from './lib/links.js';
+import { loadLinks, saveLinks, flattenLinkItems, slugify, parseYoutubeId } from './lib/links.js';
 import { recordClick, aggregateClicks } from './lib/clicks.js';
 import { renderPage, renderStats } from './lib/render.js';
 import { renderAdmin } from './lib/adminRender.js';
@@ -51,6 +51,25 @@ function optionalHexColor(value, label) {
   if (!value) return '';
   if (!HEX_RE.test(value)) throw Object.assign(new Error(`Invalid ${label}`), { statusCode: 400 });
   return value;
+}
+
+// Adds utm_source/medium/campaign to an outbound link at redirect time —
+// configured once in /admin rather than per-link. Only fills in params the
+// destination URL doesn't already set, so a link the editor already
+// hand-tagged isn't silently overwritten.
+function appendUtmParams(urlStr, data) {
+  let url;
+  try {
+    url = new URL(urlStr);
+  } catch {
+    return urlStr; // mailto:/tel: etc. — nothing to append params to
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return urlStr;
+  const params = { utm_source: data.utmSource, utm_medium: data.utmMedium, utm_campaign: data.utmCampaign };
+  for (const [key, value] of Object.entries(params)) {
+    if (value && !url.searchParams.has(key)) url.searchParams.set(key, value);
+  }
+  return url.toString();
 }
 
 function sha256(str) {
@@ -237,6 +256,7 @@ async function sanitizeAndPersistContent(rawSections, rawSocialLinks, previousIt
       }
 
       const emoji = String(rawItem.emoji || '').trim().slice(0, 8);
+      const style = rawItem.style === 'featured' ? 'featured' : 'classic';
       const rawSlug = rawItem.slug ? slugify(String(rawItem.slug).trim().slice(0, 60)) : slugify(title);
       let unique = rawSlug;
       let i = 2;
@@ -249,7 +269,7 @@ async function sanitizeAndPersistContent(rawSections, rawSocialLinks, previousIt
         images[unique] = image;
       }
 
-      items.push({ type: 'link', title: title.slice(0, 80), url: parsedUrl.toString(), emoji, image, slug: unique });
+      items.push({ type: 'link', style, title: title.slice(0, 80), url: parsedUrl.toString(), emoji, image, slug: unique });
     }
     sections.push({ title: String(rawSection.title || '').trim().slice(0, 60), items });
   }
@@ -311,6 +331,8 @@ const server = http.createServer(async (req, res) => {
         backgroundColor: data.backgroundColor,
         sectionColor: data.sectionColor,
         contentBoxColor: data.contentBoxColor,
+        sharpCorners: data.sharpCorners,
+        avatarStyle: data.avatarStyle,
         googleAnalyticsId: data.googleAnalyticsId,
         googleAdsId: data.googleAdsId,
         facebookPixelId: data.facebookPixelId,
@@ -326,13 +348,15 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       const slug = pathname.slice('/go/'.length);
-      const link = findLink(slug);
+      const data = loadLinks();
+      const link = flattenLinkItems(data).find((l) => l.slug === slug);
       if (!link) {
         res.writeHead(404, { 'Content-Type': 'text/plain' }).end('Link not found');
         return;
       }
       await recordClick(slug, req);
-      res.writeHead(302, { Location: link.url, 'Cache-Control': 'no-store' });
+      const destination = appendUtmParams(link.url, data);
+      res.writeHead(302, { Location: destination, 'Cache-Control': 'no-store' });
       res.end();
       return;
     }
@@ -413,6 +437,11 @@ const server = http.createServer(async (req, res) => {
         const backgroundColor = optionalHexColor(body.backgroundColor, 'background color');
         const sectionColor = optionalHexColor(body.sectionColor, 'section color');
         const contentBoxColor = optionalHexColor(body.contentBoxColor, 'content box color');
+        const sharpCorners = Boolean(body.sharpCorners);
+        const avatarStyle = body.avatarStyle === 'hero' ? 'hero' : 'circle';
+        const utmSource = String(body.utmSource || '').trim().slice(0, 60);
+        const utmMedium = String(body.utmMedium || '').trim().slice(0, 60);
+        const utmCampaign = String(body.utmCampaign || '').trim().slice(0, 60);
 
         const googleAnalyticsId = String(body.googleAnalyticsId || '').trim();
         const googleAdsId = String(body.googleAdsId || '').trim();
@@ -467,6 +496,11 @@ const server = http.createServer(async (req, res) => {
           backgroundColor,
           sectionColor,
           contentBoxColor,
+          sharpCorners,
+          avatarStyle,
+          utmSource,
+          utmMedium,
+          utmCampaign,
           avatar,
           favicon,
           googleAnalyticsId,

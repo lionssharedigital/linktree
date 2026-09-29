@@ -312,15 +312,15 @@ export function renderAdmin({ data, pageUrl, saveUrl, statsUrl, dashboardUrl, ge
       facebookPixelId: initial.facebookPixelId || '',
       sections: (initial.sections || []).map((s) => ({
         title: s.title || '',
-        items: (s.items || []).map((it) =>
-          it.type === 'video'
-            ? { type: 'video', title: it.title || '', youtubeId: it.youtubeId || '' }
-            : {
-                type: 'link', style: it.style === 'featured' ? 'featured' : 'classic',
-                title: it.title || '', url: it.url || '', emoji: it.emoji || '',
-                image: it.image || '', imageUpload: null, slug: it.slug || '',
-              }
-        ),
+        items: (s.items || []).map((it) => {
+          if (it.type === 'video') return { type: 'video', title: it.title || '', youtubeId: it.youtubeId || '' };
+          if (it.type === 'soundcloud') return { type: 'soundcloud', title: it.title || '', soundcloudUrl: it.soundcloudUrl || '' };
+          return {
+            type: 'link', style: it.style === 'featured' ? 'featured' : 'classic',
+            title: it.title || '', url: it.url || '', emoji: it.emoji || '',
+            image: it.image || '', imageUpload: null, slug: it.slug || '',
+          };
+        }),
       })),
       socialLinks: (initial.socialLinks || []).map((s) => ({
         icon: s.icon || Object.keys(ICONS)[0], url: s.url || '', slug: s.slug || '',
@@ -426,13 +426,18 @@ export function renderAdmin({ data, pageUrl, saveUrl, statsUrl, dashboardUrl, ge
         addRow.className = 'add-row';
         addRow.innerHTML = \`
           <button type="button" class="add-btn" data-action="add-link">+ Add link</button>
-          <button type="button" class="add-btn" data-action="add-video">+ Add YouTube video</button>\`;
+          <button type="button" class="add-btn" data-action="add-video">+ Add YouTube video</button>
+          <button type="button" class="add-btn" data-action="add-soundcloud">+ Add SoundCloud track</button>\`;
         addRow.querySelector('[data-action="add-link"]').addEventListener('click', () => {
           section.items.push({ type: 'link', style: 'classic', title: '', url: '', emoji: '', image: '', imageUpload: null, slug: '' });
           renderSections();
         });
         addRow.querySelector('[data-action="add-video"]').addEventListener('click', () => {
           section.items.push({ type: 'video', title: '', youtubeId: '' });
+          renderSections();
+        });
+        addRow.querySelector('[data-action="add-soundcloud"]').addEventListener('click', () => {
+          section.items.push({ type: 'soundcloud', title: '', soundcloudUrl: '' });
           renderSections();
         });
         block.appendChild(addRow);
@@ -451,6 +456,18 @@ export function renderAdmin({ data, pageUrl, saveUrl, statsUrl, dashboardUrl, ge
           <div class="fields">
             <input type="text" class="full" placeholder="Caption (optional)" maxlength="80" value="\${escAttr(item.title)}" data-field="title" />
             <input type="text" class="full" placeholder="YouTube URL or video ID" value="\${escAttr(item.youtubeId)}" data-field="youtubeId" />
+          </div>
+          <div class="controls">
+            <button type="button" class="icon-btn" data-action="up">↑</button>
+            <button type="button" class="icon-btn" data-action="down">↓</button>
+            <button type="button" class="icon-btn danger" data-action="remove">Remove</button>
+          </div>\`;
+      } else if (item.type === 'soundcloud') {
+        card.innerHTML = \`
+          <span class="item-type-badge">🔊 SoundCloud</span>
+          <div class="fields">
+            <input type="text" class="full" placeholder="Caption (optional)" maxlength="80" value="\${escAttr(item.title)}" data-field="title" />
+            <input type="url" class="full" placeholder="https://soundcloud.com/artist/track" value="\${escAttr(item.soundcloudUrl)}" data-field="soundcloudUrl" />
           </div>
           <div class="controls">
             <button type="button" class="icon-btn" data-action="up">↑</button>
@@ -716,6 +733,8 @@ export function renderAdmin({ data, pageUrl, saveUrl, statsUrl, dashboardUrl, ge
               try { new URL(item.url); } catch { throw new Error('"' + item.title + '" has an invalid URL.'); }
             } else if (item.type === 'video') {
               if (!item.youtubeId.trim()) throw new Error('Every video needs a YouTube URL or ID.');
+            } else if (item.type === 'soundcloud') {
+              if (!item.soundcloudUrl.trim()) throw new Error('Every SoundCloud embed needs a track/playlist URL.');
             }
           }
         }

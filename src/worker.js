@@ -5,6 +5,7 @@ import {
   generatedOgUrl,
   slugify,
   parseYoutubeId,
+  parseSoundcloudUrl,
   flattenLinkItems,
   nextUniqueSlug,
   PAGE_SLUG_RE,
@@ -248,6 +249,13 @@ async function sanitizeAndPersistContent(app, pageSlug, rawSections, rawSocialLi
         const id = parseYoutubeId(rawItem.youtubeId);
         if (!id) throw httpError(400, `"${rawItem.title || 'Untitled video'}" has an invalid YouTube URL or ID`);
         items.push({ type: 'video', title: String(rawItem.title || '').trim().slice(0, 80), youtubeId: id });
+        continue;
+      }
+
+      if (rawItem.type === 'soundcloud') {
+        const soundcloudUrl = parseSoundcloudUrl(rawItem.soundcloudUrl);
+        if (!soundcloudUrl) throw httpError(400, `"${rawItem.title || 'Untitled track'}" has an invalid SoundCloud URL`);
+        items.push({ type: 'soundcloud', title: String(rawItem.title || '').trim().slice(0, 80), soundcloudUrl });
         continue;
       }
 

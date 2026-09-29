@@ -137,6 +137,15 @@ export const BASE_STYLES = `
     margin-top: 8px; font-size: 0.85rem; font-weight: 500; color: var(--fg); text-align: center;
   }
 
+  .soundcloud-embed {
+    width: 100%; height: 166px; border-radius: 14px; overflow: hidden;
+    background: var(--card); border: 1px solid var(--card-border); box-shadow: var(--shadow);
+  }
+  .soundcloud-embed iframe { width: 100%; height: 100%; border: 0; display: block; }
+  .soundcloud-caption {
+    margin-top: 8px; font-size: 0.85rem; font-weight: 500; color: var(--fg); text-align: center;
+  }
+
   .social-row {
     width: 100%; display: flex; flex-wrap: wrap; justify-content: center; gap: 12px;
   }
@@ -194,12 +203,33 @@ function renderVideoItem(item) {
       </div>`;
 }
 
-function renderSections(sections, basePath) {
+function renderSoundcloudItem(item, accent) {
+  if (!item.soundcloudUrl) return '';
+  const caption = item.title
+    ? `<div class="soundcloud-caption">${esc(item.title)}</div>`
+    : '';
+  const src = 'https://w.soundcloud.com/player/?url=' + encodeURIComponent(item.soundcloudUrl) +
+    '&color=' + encodeURIComponent(accent || '#7c5cff') +
+    '&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false&visual=false';
+  return `
+      <div>
+        <div class="soundcloud-embed">
+          <iframe src="${esc(src)}" loading="lazy" title="SoundCloud player${item.title ? ': ' + esc(item.title) : ''}" allow="autoplay"></iframe>
+        </div>
+        ${caption}
+      </div>`;
+}
+
+function renderSections(sections, basePath, accent) {
   return sections
     .filter((s) => (s.items || []).length)
     .map((section) => {
       const items = section.items
-        .map((item) => (item.type === 'video' ? renderVideoItem(item) : renderLinkItem(item, basePath)))
+        .map((item) => {
+          if (item.type === 'video') return renderVideoItem(item);
+          if (item.type === 'soundcloud') return renderSoundcloudItem(item, accent);
+          return renderLinkItem(item, basePath);
+        })
         .join('');
       const title = section.title ? `<div class="section-title">${esc(section.title)}</div>` : '';
       return `
@@ -360,7 +390,7 @@ export function renderPage({
       }
       <h1>${title}</h1>
       <p class="bio">${description}</p>
-      ${renderSections(sections || [], basePath)}
+      ${renderSections(sections || [], basePath, accent)}
       ${renderSocialRow(socialLinks || [], basePath)}
     </div>
     <footer>&copy; ${new Date().getFullYear()} ${title}</footer>

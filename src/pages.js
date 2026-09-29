@@ -58,6 +58,21 @@ export function parseYoutubeId(input) {
   return null;
 }
 
+// Accepts a soundcloud.com (or on.soundcloud.com share link) track/playlist/
+// user URL and returns it normalized, or null if it's not a SoundCloud URL.
+export function parseSoundcloudUrl(input) {
+  const str = String(input || '').trim();
+  try {
+    const url = new URL(str);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    if (!/(^|\.)(soundcloud\.com|on\.soundcloud\.com)$/.test(url.hostname)) return null;
+    if (url.pathname === '/' || url.pathname === '') return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 // Old flat `links: [...]` files (pre-sections) get wrapped into a single
 // untitled section so imported legacy content keeps working.
 function migrateToSections(data) {
@@ -86,6 +101,9 @@ function normalizeSections(sections, seenSlugs) {
     items: (section.items || []).map((item) => {
       if (item.type === 'video') {
         return { type: 'video', title: item.title || '', youtubeId: item.youtubeId || '' };
+      }
+      if (item.type === 'soundcloud') {
+        return { type: 'soundcloud', title: item.title || '', soundcloudUrl: item.soundcloudUrl || '' };
       }
       const rawSlug = item.slug ? slugify(item.slug) : slugify(item.title || '');
       return {

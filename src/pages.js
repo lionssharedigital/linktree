@@ -1,9 +1,29 @@
-import { readFileSync } from 'node:fs';
-import { writeFile, rename, unlink } from 'node:fs/promises';
 import { SOCIAL_ICONS } from './icons.js';
 
-const LINKS_PATH = new URL('../links.json', import.meta.url);
-const LINKS_TMP_PATH = new URL('../links.json.tmp', import.meta.url);
+// Page content is a JSON document stored in D1 (pages.content) with the
+// same shape the old links.json had; uploads live in R2 under "<slug>/...",
+// served publicly at /media/<slug>/...
+
+export const PAGE_SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
+
+// Top-level paths the router owns, so no page can shadow them.
+const RESERVED_SLUGS = new Set([
+  'admin', 'api', 'account', 'assets', 'go', 'help', 'invite', 'login', 'logout',
+  'media', 'public', 'register', 'reset', 'settings', 'setup', 'signup', 'static',
+  'stats', 'uploads', 'www',
+]);
+
+export function isValidPageSlug(slug) {
+  return PAGE_SLUG_RE.test(slug) && !RESERVED_SLUGS.has(slug);
+}
+
+export function mediaUrl(slug, file) {
+  return `/media/${slug}/${file}`;
+}
+
+export function generatedOgUrl(slug) {
+  return mediaUrl(slug, 'og.png');
+}
 
 export function slugify(title) {
   return title
@@ -39,8 +59,7 @@ export function parseYoutubeId(input) {
 }
 
 // Old flat `links: [...]` files (pre-sections) get wrapped into a single
-// untitled section so existing deployments keep working without a manual
-// migration step.
+// untitled section so imported legacy content keeps working.
 function migrateToSections(data) {
   if (Array.isArray(data.links) && !data.sections) {
     return {
@@ -51,7 +70,7 @@ function migrateToSections(data) {
   return data;
 }
 
-function nextUniqueSlug(rawSlug, seenSlugs) {
+export function nextUniqueSlug(rawSlug, seenSlugs) {
   let unique = rawSlug;
   let i = 2;
   while (seenSlugs.has(unique)) unique = `${rawSlug}-${i++}`;
@@ -60,7 +79,7 @@ function nextUniqueSlug(rawSlug, seenSlugs) {
 }
 
 // `seenSlugs` is shared across sections AND social icons, since both go
-// through the same /go/:slug click-tracking namespace.
+// through the same /<page>/go/:slug click-tracking namespace.
 function normalizeSections(sections, seenSlugs) {
   return (sections || []).map((section) => ({
     title: section.title || '',
@@ -91,11 +110,10 @@ function normalizeSocialLinks(socialLinks, seenSlugs) {
     });
 }
 
-// Re-read links.json on every call so editing the JSON is the whole CMS —
-// no restart required to publish a change.
-export function loadLinks() {
-  const raw = readFileSync(LINKS_PATH, 'utf8');
-  const data = migrateToSections(JSON.parse(raw));
+// Normalizes page content on every read and write, so hand-edited or
+// imported JSON always renders with unique link slugs.
+export function normalizeContent(raw) {
+  const data = migrateToSections({ ...raw });
   const seenSlugs = new Set();
   data.sections = normalizeSections(data.sections, seenSlugs);
   data.socialLinks = normalizeSocialLinks(data.socialLinks, seenSlugs);
@@ -119,30 +137,4 @@ export function flattenLinkItems(data) {
     });
   }
   return items;
-}
-
-export function findLink(slug) {
-  const data = loadLinks();
-  return flattenLinkItems(data).find((l) => l.slug === slug) || null;
-}
-
-// Atomic write: write to a temp file then rename over the real file, so a
-// crash or concurrent read never sees a half-written links.json.
-export async function saveLinks(data) {
-  const seenSlugs = new Set();
-  const toSave = {
-    ...data,
-    sections: normalizeSections(data.sections, seenSlugs),
-    socialLinks: normalizeSocialLinks(data.socialLinks, seenSlugs),
-  };
-  delete toSave.links;
-  const json = JSON.stringify(toSave, null, 2) + '\n';
-  await writeFile(LINKS_TMP_PATH, json, 'utf8');
-  try {
-    await rename(LINKS_TMP_PATH, LINKS_PATH);
-  } catch (err) {
-    await unlink(LINKS_TMP_PATH).catch(() => {});
-    throw err;
-  }
-  return toSave;
 }

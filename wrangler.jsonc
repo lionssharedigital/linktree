@@ -1,0 +1,38 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "gravitas-links",
+  // The Gravitas Cloudflare account (the wrangler login has access to several).
+  "account_id": "6b6272abaf0682ab351648d5180020d2",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-09-25",
+
+  // Shared built-in files (default avatar, placeholder image) are served
+  // straight from public/ by Cloudflare, before the Worker runs.
+  "assets": { "directory": "./public" },
+
+  "routes": [{ "pattern": "links.gravitasrecordings.com", "custom_domain": true }],
+
+  "vars": {
+    // Public URL — used for canonical/og:image URLs and invite links, and an
+    // https:// value turns on Secure session cookies. Override it for local
+    // dev in .dev.vars.
+    "SITE_URL": "https://links.gravitasrecordings.com",
+    // Optional page slug to also serve at "/". Blank sends "/" to the login.
+    "ROOT_PAGE": ""
+  },
+  // SESSION_SECRET is a secret, not a var: `npx wrangler secret put SESSION_SECRET`
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "gravitaslink",
+      // From `npx wrangler d1 create gravitaslink`.
+      "database_id": "b619e2d9-43d0-4335-aed0-a432feac1683",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "gravitaslink-bucket" }],
+
+  "observability": { "enabled": true }
+}

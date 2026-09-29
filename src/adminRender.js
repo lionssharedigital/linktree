@@ -1,7 +1,7 @@
 import { BASE_STYLES } from './render.js';
 import { SOCIAL_ICONS } from './icons.js';
 
-function esc(str = '') {
+export function esc(str = '') {
   return String(str)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -11,11 +11,11 @@ function esc(str = '') {
 
 // Safe to embed inside a <script> tag: escapes "<" so a malicious title
 // like "</script><script>..." in links.json can't break out of the tag.
-function embedJson(value) {
+export function embedJson(value) {
   return JSON.stringify(value).replace(/</g, '\\u003c');
 }
 
-const ADMIN_STYLES = `
+export const ADMIN_STYLES = `
   .admin { max-width: 680px; align-items: stretch; }
   h1 { text-align: left; }
   .toplinks { color: var(--muted); font-size: 0.85rem; margin: 0 0 28px; }
@@ -107,13 +107,13 @@ const ADMIN_STYLES = `
   .status.err { color: #e5484d; }
 `;
 
-export function renderAdmin({ name, siteUrl, data }) {
+export function renderAdmin({ data, pageUrl, saveUrl, statsUrl, dashboardUrl, generatedOgUrl, ogPreviewSrc }) {
   return `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Admin · ${esc(name)}</title>
+  <title>Edit · ${esc(data.name)}</title>
   <meta name="robots" content="noindex, nofollow" />
   <style>
     ${BASE_STYLES}
@@ -122,10 +122,11 @@ export function renderAdmin({ name, siteUrl, data }) {
 </head>
 <body>
   <div class="page admin">
+    <p class="toplinks"><a href="${esc(dashboardUrl)}">← Dashboard</a></p>
     <h1>Edit page</h1>
     <p class="toplinks">
-      <a href="/" target="_blank" rel="noopener">View live page ↗</a> ·
-      <a href="/stats" target="_blank" rel="noopener">View click stats ↗</a>
+      <a href="${esc(pageUrl)}" target="_blank" rel="noopener">View live page ↗</a> ·
+      <a href="${esc(statsUrl)}">View click stats</a>
     </p>
 
     <fieldset>
@@ -177,7 +178,7 @@ export function renderAdmin({ name, siteUrl, data }) {
 
       <label for="f-og-image">Preview image</label>
       <div class="avatar-row">
-        <img id="og-image-preview" src="${esc(data.ogImage || '/og.png')}" alt="Preview image" style="width: 96px; height: 50px; border-radius: 8px; object-fit: cover;" />
+        <img id="og-image-preview" src="${esc(ogPreviewSrc)}" alt="Preview image" style="width: 96px; height: 50px; border-radius: 8px; object-fit: cover;" />
         <div>
           <input type="file" id="f-og-image" accept="image/png,image/jpeg,image/webp" />
           <div class="hint">Recommended 1200&times;630. PNG, JPG or WebP, up to 2&nbsp;MB.</div>
@@ -281,6 +282,8 @@ export function renderAdmin({ name, siteUrl, data }) {
   <script>
     const ICONS = ${embedJson(SOCIAL_ICONS)};
     const initial = ${embedJson(data)};
+    const SAVE_URL = ${embedJson(saveUrl)};
+    const GENERATED_OG_URL = ${embedJson(generatedOgUrl)};
     const state = {
       name: initial.name || '',
       bio: initial.bio || '',
@@ -632,7 +635,7 @@ export function renderAdmin({ name, siteUrl, data }) {
       state.ogImageUpload = null;
       state.clearOgImage = true;
       el('f-og-image').value = '';
-      el('og-image-preview').src = '/og.png';
+      el('og-image-preview').src = GENERATED_OG_URL;
       el('og-image-clear').style.display = 'none';
       setStatus('Will use the auto-generated preview image — click Save.', '');
     });
@@ -646,6 +649,60 @@ export function renderAdmin({ name, siteUrl, data }) {
       state.socialLinks.push({ icon: Object.keys(ICONS)[0], url: '', slug: '' });
       renderSocialList();
     });
+
+    // Draws the auto-generated 1200x630 share card (initials on an accent
+    // circle, name, bio) and returns it as a PNG data URL, or null if this
+    // browser can't. It's rendered here rather than on the server because
+    // Workers have no image library; the server just stores the PNG.
+    function drawOgImage() {
+      try {
+        const name = state.ogTitle || state.seoTitle || state.name;
+        const bio = state.ogDescription || state.seoDescription || state.bio;
+        const accent = /^#[0-9a-fA-F]{3,8}$/.test(state.accent) ? state.accent : '#7c5cff';
+        const canvas = document.createElement('canvas');
+        canvas.width = 1200;
+        canvas.height = 630;
+        const g = canvas.getContext('2d');
+        const bg = g.createLinearGradient(0, 0, 1200, 630);
+        bg.addColorStop(0, '#121214');
+        bg.addColorStop(1, '#1c1c24');
+        g.fillStyle = bg;
+        g.fillRect(0, 0, 1200, 630);
+        g.fillStyle = accent;
+        g.beginPath();
+        g.arc(600, 220, 90, 0, Math.PI * 2);
+        g.fill();
+
+        const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif';
+        g.textAlign = 'center';
+        const initials = name.split(/\\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
+        g.fillStyle = '#ffffff';
+        g.font = '700 64px ' + font;
+        g.fillText(initials, 600, 245);
+        g.fillStyle = '#f2f1ef';
+        g.font = '700 52px ' + font;
+        g.fillText(name, 600, 370, 1100);
+
+        // Manual word-wrap for the bio, two lines max.
+        const lines = [];
+        let current = '';
+        for (const word of bio.split(/\\s+/).filter(Boolean)) {
+          if ((current + ' ' + word).trim().length > 48) {
+            if (current) lines.push(current);
+            current = word;
+          } else {
+            current = (current + ' ' + word).trim();
+          }
+        }
+        if (current) lines.push(current);
+        g.fillStyle = '#a3a1a0';
+        g.font = '28px ' + font;
+        lines.slice(0, 2).forEach((line, i) => g.fillText(line, 600, 420 + i * 38, 1100));
+        return canvas.toDataURL('image/png');
+      } catch {
+        return null;
+      }
+    }
 
     el('save-btn').addEventListener('click', async () => {
       setStatus('Saving…', '');
@@ -665,10 +722,13 @@ export function renderAdmin({ name, siteUrl, data }) {
         for (const social of state.socialLinks) {
           try { new URL(social.url); } catch { throw new Error(ICONS[social.icon].label + ' link has an invalid URL.'); }
         }
-        const res = await fetch('/admin/save', {
+        const res = await fetch(SAVE_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(state),
+          body: JSON.stringify({
+            ...state,
+            ogGeneratedUpload: (() => { const dataUrl = drawOgImage(); return dataUrl ? { dataUrl } : null; })(),
+          }),
         });
         const body = await res.json().catch(() => ({}));
         if (!res.ok || !body.ok) throw new Error(body.error || ('Save failed (' + res.status + ')'));
@@ -682,7 +742,7 @@ export function renderAdmin({ name, siteUrl, data }) {
         state.ogImage = body.ogImage !== undefined ? body.ogImage : state.ogImage;
         state.ogImageUpload = null;
         state.clearOgImage = false;
-        el('og-image-preview').src = state.ogImage || ('/og.png?t=' + Date.now());
+        el('og-image-preview').src = state.ogImage || (GENERATED_OG_URL + '?t=' + Date.now());
         el('og-image-clear').style.display = state.ogImage ? '' : 'none';
         if (body.images) {
           for (const section of state.sections) {
@@ -698,7 +758,7 @@ export function renderAdmin({ name, siteUrl, data }) {
         setStatus(
           body.ogRegenerated
             ? 'Saved. Preview image updated.'
-            : 'Saved. (Preview image not regenerated — run "npm run og" on the server.)',
+            : "Saved. (This browser couldn't draw the auto-generated preview image.)",
           'ok'
         );
       } catch (err) {

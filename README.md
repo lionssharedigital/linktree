@@ -1,14 +1,62 @@
-# linkbio
+# Gravitas links
 
-A self-hosted Linktree replacement: one Node.js process, a JSON file as the
-CMS (editable by hand or through a built-in `/admin` panel), first-party
-click tracking, and Linktree-style sections/images/video embeds — all with
-no third-party trackers unless you explicitly opt into Google Analytics/Ads
-or the Meta (Facebook) Pixel.
+A multi-artist Linktree replacement for Gravitas Recordings, running on
+Cloudflare Workers: a link-in-bio page per artist at
+`links.gravitasrecordings.com/<artist>`, each with its own login-protected
+editor, first-party click tracking, and Linktree-style sections/images/video
+embeds — with no servers to manage and no third-party trackers unless an
+artist explicitly opts into Google Analytics/Ads or the Meta (Facebook)
+Pixel.
+
+An **admin** creates pages and hands out invite links; each **artist**
+opens their link, sets a password, and from then on manages their own page.
+
+## Accounts and roles
+
+| | Admin | Artist |
+|---|---|---|
+| Edit pages | every page | only pages they've been given |
+| See click stats | every page | only their pages |
+| Create / archive pages | ✓ | |
+| Invite artists and admins, give/remove page access | ✓ | |
+| Make password-reset links, delete users | ✓ | |
+
+**Provisioning an artist:**
+
+1. In `/admin`, **Create a page** — display name and URL (e.g. `dj-nova` →
+   `yourdomain.com/dj-nova`). It starts from
+   [`templates/starter.json`](templates/starter.json).
+2. On that page's card, **Create invite link** (optionally locked to the
+   artist's email). Copy it and send it however you like — text, email,
+   DM. There's no outbound email provider involved.
+3. The artist opens the link, sets their email + password, and lands in the
+   editor for their page.
+
+Invite links are single-use and expire after 7 days. They're stored only
+as hashes, so each link is shown exactly once, at creation; if one goes
+missing, revoke it and make a new one. One person can manage several pages
+(e.g. a manager with multiple artists): send another invite while they're
+logged in and it's added to their existing account, or use **Give access**
+in the Users table.
+
+**Forgotten passwords:** an admin clicks **Password reset link** next to
+the user (valid 24 hours). Setting a new password — or changing it from
+the dashboard — signs that user out everywhere else.
+
+**Archiving** a page takes it offline and removes everyone's access and open
+invites, but nothing is deleted — content, uploads, and click history are
+kept, and the URL stays reserved. To restore one:
+
+```bash
+npx wrangler d1 execute gravitaslink --remote --command "UPDATE pages SET archived_at = NULL WHERE slug = 'the-slug'"
+```
+
+then give its artist access again from the dashboard.
 
 ## How it works
 
-- **Content** lives in [`links.json`](links.json) — `name`, `bio`, `avatar`,
+- **Content** for each page is a JSON document (the `content` column of the
+  `pages` table in D1) — `name`, `bio`, `avatar`,
   colors, optional analytics IDs, and a `sections` array. Each section has a
   `title` (shown as a heading above it) and `items`, where each item is
   either:
@@ -25,16 +73,25 @@ or the Meta (Facebook) Pixel.
   `slug`) renders as a single row of icon-only buttons at the very bottom
   of the page, above the footer — for Spotify/Instagram/YouTube/etc. profile
   links. Icons come from a built-in library (see
-  [`lib/icons.js`](lib/icons.js)); `/admin` has a dropdown listing every
+  [`src/icons.js`](src/icons.js)); `/admin` has a dropdown listing every
   available one.
 
-  Editing this file *is* the CMS — the page re-reads it on every request,
-  so there's nothing to rebuild or restart. See the shape in the checked-in
-  [`links.json`](links.json) for a working example.
-- **The page** (`GET /`) is server-rendered HTML with embedded CSS —
+  See [`templates/starter.json`](templates/starter.json) — what every new
+  page starts from — for the shape.
+- **Storage** is two Cloudflare services, bound to the Worker in
+  [`wrangler.jsonc`](wrangler.jsonc):
+  - **D1** (`gravitaslink`, SQLite) — users, invites, page content,
+    page access, clicks, and failed-login counters. Schema:
+    [`migrations/0001_init.sql`](migrations/0001_init.sql).
+  - **R2** (`gravitaslink-bucket`) — uploads, keyed `<slug>/<file>` and
+    served at `/media/<slug>/<file>`.
+
+  Shared built-in files in [`public/`](public/) (default avatar, placeholder
+  image) are served by Cloudflare's static assets, before the Worker runs.
+- **The page** (`GET /<slug>`) is server-rendered HTML with embedded CSS —
   mobile-first, dark mode via `prefers-color-scheme` (overridable with your
   own page background, section/button, and content-box colors), subtle
-  hover states. See [`lib/render.js`](lib/render.js). Optionally, everything
+  hover states. See [`src/render.js`](src/render.js). Optionally, everything
   (avatar, bio, sections, social row) can render inside a colored card —
   Linktree's boxed-card look — by setting a content box color in `/admin`;
   leave it blank for the flat, no-box layout.
@@ -51,8 +108,8 @@ or the Meta (Facebook) Pixel.
     made, so this stays consistent with the zero-third-party-by-default
     posture.
 - **Campaign tracking**: optional `utmSource`/`utmMedium`/`utmCampaign` in
-  `/admin` get appended as `utm_*` query params to every outbound link and
-  social-icon click at redirect time (`/go/:slug`), so link clicks show up
+  the editor get appended as `utm_*` query params to every outbound link and
+  social-icon click at redirect time (`/<page>/go/:slug`), so link clicks show up
   tagged in whatever analytics you're already using. A destination URL that
   already sets one of those params keeps its own value — this only fills in
   what's missing.
@@ -67,54 +124,47 @@ or the Meta (Facebook) Pixel.
   The social preview image defaults to the auto-generated one (see below)
   but can be replaced with your own upload (recommended 1200×630) in
   `/admin`.
-- **`/admin`** is a small editor UI (protected by its own Basic Auth
-  credentials) for people who shouldn't have to touch JSON or a terminal —
-  see [Admin panel](#admin-panel-for-non-technical-editors) below.
-- **Click tracking**: every link button goes through `/go/<slug>`, which
-  appends one JSON line to `clicks.log` (timestamp, slug, referrer,
-  user-agent) and issues a `302` to the real URL. Video embeds aren't
-  tracked this way — they play inline and never redirect. See
-  [`lib/clicks.js`](lib/clicks.js).
-- **`/stats`** is protected by HTTP Basic Auth (credentials from `.env`) and
-  shows clicks per link, aggregated from `clicks.log`.
-- **OG image**: [`lib/og.js`](lib/og.js) renders `public/og.png`
-  (1200×630) from `links.json`, so link previews in iMessage/Slack/
-  Twitter/etc. show your name, initials, and bio. It regenerates
-  automatically whenever `/admin` saves a change to name/bio/accent, and
-  can also be run manually via `npm run og`.
+- **`/admin`** is the logged-in dashboard: the list of pages you can edit,
+  plus (for admins) page creation, invites, and user management. Each
+  page's editor is at `/admin/pages/<slug>` — see
+  [Page editor](#page-editor) below.
+- **Click tracking**: every link button goes through `/<page>/go/<slug>`,
+  which issues a `302` to the real URL and, after responding, records the
+  click (timestamp, slug, referrer, user-agent) in D1. Video embeds aren't
+  tracked this way — they play inline and never redirect.
+- **Click stats** for a page are at `/admin/pages/<slug>/stats`, visible to
+  that page's editors and admins.
+- **OG image**: every time a page is saved, the editor draws a 1200×630
+  share card (initials on the accent color, name, bio) on a `<canvas>` in
+  the browser and uploads it as `og.png` — Workers have no image library,
+  so the server only stores it. Link previews in iMessage/Slack/Twitter/etc.
+  then show it. A page that has never been saved uses its avatar instead.
 
-No database, no framework — just Node's built-in `http` module plus
-`sharp` (for the OG image). **Third-party network calls only happen if you
+No framework and no runtime dependencies — just the Workers runtime and Web
+Crypto. **Third-party network calls only happen if you
 opt in**: YouTube's own servers when a visitor presses play on a video
 embed (unavoidable — that's what "embed a video" means), and Google's
 gtag.js and/or Meta's fbevents.js if you fill in a Google Analytics, Google
 Ads, or Meta Pixel ID in `/admin`. All three are blank/off by default.
 
-## Local setup
+## Local development
 
 ```bash
-cp .env.example .env        # then edit STATS_USER/PASS and ADMIN_USER/PASS
 npm install
-npm run og                  # generates public/og.png from links.json
-npm start                   # http://localhost:3000
+cp .dev.vars.example .dev.vars      # local SITE_URL + SESSION_SECRET
+npm run db:migrate:local            # create the tables in local D1
+npm run dev                         # http://localhost:8787
+npm run admin-invite -- --local     # in another terminal: one-time admin setup link
 ```
 
-Edit `links.json` and `public/avatar.svg` directly, or open `/admin` and log
-in with `ADMIN_USER`/`ADMIN_PASS` to edit everything through a form instead
-(see below).
+`wrangler dev` simulates D1 and R2 on your machine (in `.wrangler/`), so
+nothing touches the live site. Open the printed link to create your local
+admin.
 
-Visit `/stats` and log in with `STATS_USER`/`STATS_PASS` to see click
-counts.
+## Page editor
 
-## Admin panel (for non-technical editors)
-
-`/admin` is a single-page editor, protected by HTTP Basic Auth using
-`ADMIN_USER`/`ADMIN_PASS` from `.env` (falls back to the `/stats` creds if
-those aren't set, so nothing breaks if you skip configuring them — but for
-a marketing editor who shouldn't see click analytics, set separate
-`ADMIN_USER`/`ADMIN_PASS` values).
-
-From the page they can:
+`/admin/pages/<slug>` is a single-page editor for one artist's page.
+From it they can:
 
 - Edit name, bio, accent color, and separately override the page background,
   section/button, and content-box colors (leave any blank to keep following
@@ -139,113 +189,104 @@ From the page they can:
 - Optionally set a Google Analytics measurement ID, Google Ads conversion
   ID, and/or Meta (Facebook) Pixel ID — leaving all three blank (the
   default) keeps the page free of third-party trackers
-- Click **Save changes** to write straight to `links.json` (atomically —
-  readers never see a half-written file) and regenerate `public/og.png`
-
-There's no separate build or deploy step for content edits — the save
-happens directly against the file the running server reads. A link "Save"
-edit is live the moment the request completes.
+- Click **Save changes** — the page is live the moment the request
+  completes, with no build or deploy step for content edits.
 
 **Security notes:**
-- The save endpoint only accepts `Content-Type: application/json`, which a
-  plain HTML form (the classic CSRF vector) cannot send — this is the
-  endpoint's CSRF defense, so don't loosen that content-type check.
-- Uploaded avatars are restricted to an image-type allowlist and a 2 MB
-  cap; link URLs are restricted to `http:`, `https:`, `mailto:`, and
-  `tel:` schemes to block `javascript:`-style injection.
-- Run this behind HTTPS in production (see deploy steps below) — Basic
-  Auth sends credentials on every request, unencrypted without TLS.
+- Logins use PBKDF2-SHA256 password hashes (100k iterations, the Workers
+  maximum) and a signed, `HttpOnly`, `SameSite=Lax`, `Secure` session
+  cookie. Failed password attempts are rate-limited per IP (10 per 15
+  minutes).
+- Every state-changing endpoint only accepts `Content-Type:
+  application/json`, which a plain HTML form (the classic CSRF vector)
+  cannot send, and rejects mismatched `Origin` headers — don't loosen
+  either check.
+- Artists can only read or write their own pages. That's enforced
+  server-side on every request, not just hidden in the UI.
+- Uploads are restricted to an image-type allowlist and a 2 MB cap, and are
+  served from `/media/…` with a sandboxing `Content-Security-Policy`, so a
+  malicious SVG from one artist can't run script as the site (and so can't
+  act on an admin's session). Link URLs are restricted to `http:`,
+  `https:`, `mailto:`, and `tel:`.
+- Invite and reset tokens are stored only as SHA-256 hashes, and are
+  consumed atomically so a link can't be used twice.
 
-## Deploying to a plain VPS
+## Deploying to Cloudflare
 
-These steps assume a fresh Ubuntu/Debian VPS and a domain already pointed
-at its IP address.
+Needs a Cloudflare account that has `gravitasrecordings.com` as a zone. The
+**Workers Paid plan** ($5/month) is recommended: every login and password
+check runs 100k PBKDF2 rounds, which can exceed the free plan's 10 ms CPU
+limit per request. D1 and R2 usage for a site like this fits well within
+the included free allowances.
 
-### 1. Install Node.js and create a service user
-
-```bash
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -
-sudo apt-get install -y nodejs
-sudo useradd --system --home /opt/linkbio --shell /usr/sbin/nologin linkbio
-```
-
-### 2. Ship the code
-
-```bash
-sudo mkdir -p /opt/linkbio
-sudo rsync -a --exclude node_modules --exclude .git ./ root@your-vps:/opt/linkbio/
-# on the VPS:
-cd /opt/linkbio
-sudo cp .env.example .env && sudo vim .env     # set real STATS_/ADMIN_ USER/PASS + SITE_URL
-sudo npm install
-sudo npm run og
-sudo chown -R linkbio:linkbio /opt/linkbio
-```
-
-### 3. Run it as a systemd service
+### First deploy
 
 ```bash
-sudo cp deploy/linkbio.service /etc/systemd/system/linkbio.service
-sudo systemctl daemon-reload
-sudo systemctl enable --now linkbio
-sudo systemctl status linkbio      # should show "active (running)"
+npx wrangler login                                  # opens the browser
+npx wrangler d1 create gravitaslink               # copy the database_id it prints…
+#   …into "database_id" in wrangler.jsonc
+npx wrangler r2 bucket create gravitaslink-bucket
+npm run db:migrate                                  # create the tables in live D1
+npx wrangler secret put SESSION_SECRET              # paste a long random string, e.g. from: openssl rand -base64 32
+npm run deploy
+npm run admin-invite -- you@gravitasrecordings.com  # one-time admin setup link
 ```
 
-The service listens on `127.0.0.1:3000` only — it's not exposed directly to
-the internet. That's what the reverse proxy in front of it is for.
+`npm run deploy` also attaches `links.gravitasrecordings.com` as a Custom
+Domain (DNS record and certificate are created automatically). If a DNS
+record for `links` already exists in the zone, delete it first or the
+deploy will refuse to take over the hostname.
 
-### 4a. Reverse proxy + TLS with Caddy (recommended — auto HTTPS)
+### Shipping updates
 
 ```bash
-sudo apt-get install -y caddy
-sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
-# edit the domain inside the file first
-sudo systemctl reload caddy
+npm run deploy
 ```
 
-That's it — Caddy requests and renews a Let's Encrypt certificate
-automatically.
+Content edits never need a deploy — they're live as soon as they're saved.
+If a future change adds a file to `migrations/`, run `npm run db:migrate`
+before deploying.
 
-### 4b. Reverse proxy + TLS with nginx + certbot
+### Logs and backups
+
+- `npx wrangler tail` streams live logs; they're also in the dashboard
+  (Workers → gravitas-links → Logs).
+- D1 Time Travel can restore the database to any point in the last 30 days
+  on the paid plan (7 on free) — `npx wrangler d1 time-travel`.
+  For an off-Cloudflare copy: `npx wrangler d1 export gravitaslink --remote --output backup.sql`.
+
+## Moving over from the DigitalOcean droplet
+
+The droplet runs the older single-page version (`links.json`, uploads in
+`public/`, `clicks.log`). After the first deploy above:
 
 ```bash
-sudo apt-get install -y nginx certbot python3-certbot-nginx
-sudo cp deploy/nginx.conf /etc/nginx/sites-available/linkbio
-sudo ln -s /etc/nginx/sites-available/linkbio /etc/nginx/sites-enabled/
-# edit server_name inside the file first
-sudo nginx -t && sudo systemctl reload nginx
-sudo certbot --nginx -d links.example.com
+# 1. Copy the live install down (legacy-backup/ is gitignored).
+#    /opt/linkbio is where the old README's deploy steps put it — adjust if yours differs.
+rsync -a --exclude node_modules root@YOUR_DROPLET_IP:/opt/linkbio/ ./legacy-backup/
+
+# 2. Import it as a page — uploads go to R2, content and clicks to D1
+npm run import-legacy -- your-slug ./legacy-backup
 ```
 
-### 5. Publish content updates
-
-Day-to-day edits (for a marketing editor or anyone else) happen at
-`https://links.example.com/admin` — no server access needed, and the OG
-image regenerates itself on save.
-
-For edits made locally instead (e.g. scripting a bulk change to
-`links.json`), sync the file over and regenerate the OG image on the VPS:
-
-```bash
-rsync -a links.json root@your-vps:/opt/linkbio/links.json
-ssh root@your-vps "cd /opt/linkbio && npm run og"
-```
+3. Open `/admin/pages/your-slug` and click **Save** once, to generate its
+   share image.
+4. Optionally set `"ROOT_PAGE": "your-slug"` in `wrangler.jsonc` and
+   `npm run deploy`, so `links.gravitasrecordings.com/` shows it too (old
+   `/go/<link>` URLs keep working as well).
+5. Once you're happy, point any links that used the droplet's domain at
+   the new URLs, then shut down the droplet.
 
 ## Rotating credentials
 
-Edit `STATS_USER`/`STATS_PASS` and/or `ADMIN_USER`/`ADMIN_PASS` in
-`/opt/linkbio/.env` on the VPS, then `sudo systemctl restart linkbio`.
-
-## Log rotation
-
-`clicks.log` grows forever by default. If you care about it long-term,
-either rotate it with `logrotate` (it's a plain append-only text file, so
-standard rotation works) or periodically archive/prune it — nothing in the
-app depends on old entries staying in place.
+Artists change their own passwords from the dashboard; admins can issue
+reset links. To sign **everyone** out at once, set a new secret with
+`npx wrangler secret put SESSION_SECRET`.
 
 ## Roadmap
 
-Built so far: sections, classic and featured link cards, YouTube video
+Built so far: multi-artist pages with admin/artist logins and invite
+links, sections, classic and featured link cards, YouTube video
 embeds, a social icon row, custom colors/fonts/corners, avatar/favicon/OG
 image uploads, SEO and social-preview overrides, optional Google/Meta
 analytics, and UTM campaign tagging on every outbound click.
@@ -271,3 +312,10 @@ worth building, rather than a half-working stub):
 
 ("Section header + group" from that spec is already covered by the
 existing `sections` feature — a titled heading grouping a set of links.)
+
+- **Custom domains per artist** — serving `links.artistname.com` from the
+  same Worker (Host-header routing + Cloudflare for SaaS custom hostnames)
+- **Emailed invites/resets** — currently the admin copies and sends links
+  by hand; wiring in a transactional email provider would automate it
+- **Renaming a page URL** — slugs are fixed at creation, since uploaded
+  media paths and shared links depend on them

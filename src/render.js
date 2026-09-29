@@ -154,13 +154,13 @@ export const BASE_STYLES = `
   footer a { color: inherit; }
 `;
 
-function renderLinkItem(item) {
+function renderLinkItem(item, basePath) {
   // A "featured" item with no image has nothing to feature, so it falls
   // back to the classic stacked-link treatment instead of rendering an
   // empty/broken card.
   if (item.style === 'featured' && item.image) {
     return `
-      <a class="link-featured" href="/go/${esc(item.slug)}" target="_blank" rel="noopener noreferrer">
+      <a class="link-featured" href="${esc(basePath)}/go/${esc(item.slug)}" target="_blank" rel="noopener noreferrer">
         <img class="thumb-featured" src="${esc(item.image)}" alt="" loading="lazy" />
         <span class="title-featured">${esc(item.title)}</span>
       </a>`;
@@ -171,7 +171,7 @@ function renderLinkItem(item) {
       ? `<span class="emoji">${esc(item.emoji)}</span>`
       : '';
   return `
-      <a class="link" href="/go/${esc(item.slug)}" target="_blank" rel="noopener noreferrer">
+      <a class="link" href="${esc(basePath)}/go/${esc(item.slug)}" target="_blank" rel="noopener noreferrer">
         ${icon}
         <span class="title">${esc(item.title)}</span>
       </a>`;
@@ -194,12 +194,12 @@ function renderVideoItem(item) {
       </div>`;
 }
 
-function renderSections(sections) {
+function renderSections(sections, basePath) {
   return sections
     .filter((s) => (s.items || []).length)
     .map((section) => {
       const items = section.items
-        .map((item) => (item.type === 'video' ? renderVideoItem(item) : renderLinkItem(item)))
+        .map((item) => (item.type === 'video' ? renderVideoItem(item) : renderLinkItem(item, basePath)))
         .join('');
       const title = section.title ? `<div class="section-title">${esc(section.title)}</div>` : '';
       return `
@@ -211,13 +211,13 @@ function renderSections(sections) {
     .join('');
 }
 
-function renderSocialRow(socialLinks) {
+function renderSocialRow(socialLinks, basePath) {
   if (!socialLinks || !socialLinks.length) return '';
   const icons = socialLinks
     .map((s) => {
       const svg = iconSvg(s.icon);
       if (!svg) return '';
-      return `<a class="social-icon" href="/go/${esc(s.slug)}" target="_blank" rel="noopener noreferrer" aria-label="${esc(s.icon)}">${svg}</a>`;
+      return `<a class="social-icon" href="${esc(basePath)}/go/${esc(s.slug)}" target="_blank" rel="noopener noreferrer" aria-label="${esc(s.icon)}">${svg}</a>`;
     })
     .join('');
   return `
@@ -279,11 +279,14 @@ export function renderPage({
   sections,
   socialLinks,
   siteUrl,
+  basePath,
+  canonicalUrl,
   seoTitle,
   seoDescription,
   ogTitle,
   ogDescription,
   ogImage,
+  ogImageIsGenerated,
   accent,
   backgroundColor,
   sectionColor,
@@ -306,7 +309,7 @@ export function renderPage({
   // Only the auto-generated image is guaranteed to be exactly 1200x630 —
   // a custom upload could be any size, so omit the dimension hints for it
   // rather than risk lying to the crawler.
-  const isGeneratedOgImage = ogImage === '/og.png';
+  const isGeneratedOgImage = Boolean(ogImageIsGenerated);
   const faviconHref = favicon || avatar;
 
   const overrides = [];
@@ -328,12 +331,12 @@ export function renderPage({
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${pageTitle}</title>
   <meta name="description" content="${pageDescription}" />
-  <link rel="canonical" href="${esc(siteUrl)}/" />
+  <link rel="canonical" href="${esc(canonicalUrl)}" />
 
   <meta property="og:type" content="profile" />
   <meta property="og:title" content="${socialTitle}" />
   <meta property="og:description" content="${socialDescription}" />
-  <meta property="og:url" content="${esc(siteUrl)}/" />
+  <meta property="og:url" content="${esc(canonicalUrl)}" />
   <meta property="og:image" content="${esc(ogImageUrl)}" />
   ${isGeneratedOgImage ? '<meta property="og:image:width" content="1200" />\n  <meta property="og:image:height" content="630" />' : ''}
 
@@ -357,8 +360,8 @@ export function renderPage({
       }
       <h1>${title}</h1>
       <p class="bio">${description}</p>
-      ${renderSections(sections || [])}
-      ${renderSocialRow(socialLinks || [])}
+      ${renderSections(sections || [], basePath)}
+      ${renderSocialRow(socialLinks || [], basePath)}
     </div>
     <footer>&copy; ${new Date().getFullYear()} ${title}</footer>
   </div>
@@ -367,7 +370,7 @@ export function renderPage({
 </html>`;
 }
 
-export function renderStats({ name, total, rows }) {
+export function renderStats({ name, total, rows, backHref }) {
   const body = rows.length
     ? rows
         .map(
@@ -406,7 +409,8 @@ export function renderStats({ name, total, rows }) {
 </head>
 <body>
   <div class="page">
-    <h1>Click stats</h1>
+    <p class="total"><a href="${esc(backHref)}" style="color: var(--accent); text-decoration: none;">← Back</a></p>
+    <h1>Click stats · ${esc(name)}</h1>
     <p class="total">${total} total click${total === 1 ? '' : 's'}</p>
     <table>
       <thead><tr><th>Link</th><th>Slug</th><th>Clicks</th><th>Last click</th></tr></thead>

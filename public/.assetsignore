@@ -1,0 +1,6 @@
+# Never publish leftovers from the old single-page install.
+uploads
+og.png
+og-custom.*
+favicon.*
+.assetsignore

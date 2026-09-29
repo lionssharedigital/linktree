@@ -1,18 +1,21 @@
 {
-  "name": "linkbio",
+  "name": "gravitas-links",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Self-hosted link-in-bio page with JSON-file CMS and first-party click tracking.",
+  "description": "Multi-artist link-in-bio pages on Cloudflare Workers (D1 + R2), with per-artist logins and first-party click tracking.",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js",
-    "og": "node scripts/generate-og.mjs"
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:migrate": "wrangler d1 migrations apply gravitaslink --remote",
+    "db:migrate:local": "wrangler d1 migrations apply gravitaslink --local",
+    "admin-invite": "node scripts/admin-invite.mjs",
+    "import-legacy": "node scripts/import-legacy.mjs"
   },
   "engines": {
     "node": ">=20"
   },
-  "dependencies": {
-    "sharp": "^0.33.5"
+  "devDependencies": {
+    "wrangler": "^4.143.0"
   }
 }

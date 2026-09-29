@@ -1,0 +1,32 @@
+{
+  "name": "New Artist",
+  "bio": "",
+  "avatar": "/avatar.svg",
+  "favicon": "",
+  "seoTitle": "",
+  "seoDescription": "",
+  "ogTitle": "",
+  "ogDescription": "",
+  "ogImage": "",
+  "accent": "#7c5cff",
+  "backgroundColor": "",
+  "sectionColor": "",
+  "contentBoxColor": "",
+  "sharpCorners": false,
+  "avatarStyle": "circle",
+  "utmSource": "",
+  "utmMedium": "",
+  "utmCampaign": "",
+  "googleAnalyticsId": "",
+  "googleAdsId": "",
+  "facebookPixelId": "",
+  "sections": [
+    {
+      "title": "Music",
+      "items": [
+        { "type": "link", "style": "classic", "title": "Listen on Spotify", "url": "https://open.spotify.com/", "emoji": "🎵", "image": "", "slug": "spotify" }
+      ]
+    }
+  ],
+  "socialLinks": []
+}

@@ -19,7 +19,10 @@ or the Meta (Facebook) Pixel.
     to classic if a featured item has no image), plus an auto-generated
     `slug` used for click tracking, or
   - a **video**: `title` (caption) and `youtubeId`, rendered as an inline,
-    click-to-play YouTube embed.
+    click-to-play YouTube embed, or
+  - a **SoundCloud embed**: `title` (caption) and `soundcloudUrl` (a track,
+    playlist, or user URL), rendered as SoundCloud's own inline player widget
+    tinted with your accent color.
 
   Separately, a top-level `socialLinks` array (`icon`, `url`, auto-generated
   `slug`) renders as a single row of icon-only buttons at the very bottom
@@ -72,8 +75,8 @@ or the Meta (Facebook) Pixel.
   see [Admin panel](#admin-panel-for-non-technical-editors) below.
 - **Click tracking**: every link button goes through `/go/<slug>`, which
   appends one JSON line to `clicks.log` (timestamp, slug, referrer,
-  user-agent) and issues a `302` to the real URL. Video embeds aren't
-  tracked this way — they play inline and never redirect. See
+  user-agent) and issues a `302` to the real URL. Video and SoundCloud
+  embeds aren't tracked this way — they play inline and never redirect. See
   [`lib/clicks.js`](lib/clicks.js).
 - **`/stats`** is protected by HTTP Basic Auth (credentials from `.env`) and
   shows clicks per link, aggregated from `clicks.log`.
@@ -86,9 +89,14 @@ or the Meta (Facebook) Pixel.
 No database, no framework — just Node's built-in `http` module plus
 `sharp` (for the OG image). **Third-party network calls only happen if you
 opt in**: YouTube's own servers when a visitor presses play on a video
-embed (unavoidable — that's what "embed a video" means), and Google's
-gtag.js and/or Meta's fbevents.js if you fill in a Google Analytics, Google
-Ads, or Meta Pixel ID in `/admin`. All three are blank/off by default.
+embed (unavoidable — that's what "embed a video" means), SoundCloud's own
+servers to load its player widget for any SoundCloud embed you add
+(unavoidable for the same reason — the widget iframe loads lazily, only
+once it scrolls near the viewport), and Google's gtag.js and/or Meta's
+fbevents.js if you fill in a Google Analytics, Google Ads, or Meta Pixel ID
+in `/admin`. All four are blank/off by default except that a SoundCloud
+embed, once you add one, always loads SoundCloud's widget (there's no way
+to embed a SoundCloud player without it).
 
 ## Local setup
 
@@ -128,9 +136,10 @@ From the page they can:
 - Add, remove, and reorder (↑/↓) whole **sections**, each with its own
   optional title
 - Within a section, add, remove, reorder, and edit **links** (title, URL,
-  emoji or an uploaded thumbnail image, and an optional custom slug) or
+  emoji or an uploaded thumbnail image, and an optional custom slug),
   **YouTube videos** (paste any YouTube URL or a bare video ID — it's
-  normalized automatically)
+  normalized automatically), or **SoundCloud embeds** (paste any
+  soundcloud.com track/playlist/user URL)
 - Add, remove, and reorder **social icons** — pick a platform from a
   dropdown (Spotify, Instagram, YouTube, SoundCloud, TikTok, X, Facebook,
   Apple Music, Bandcamp, Twitch, Discord, LinkedIn, Telegram, WhatsApp,
@@ -246,18 +255,18 @@ app depends on old entries staying in place.
 ## Roadmap
 
 Built so far: sections, classic and featured link cards, YouTube video
-embeds, a social icon row, custom colors/fonts/corners, avatar/favicon/OG
-image uploads, SEO and social-preview overrides, optional Google/Meta
-analytics, and UTM campaign tagging on every outbound click.
+embeds, SoundCloud track/playlist embeds, a social icon row, custom
+colors/fonts/corners, avatar/favicon/OG image uploads, SEO and
+social-preview overrides, optional Google/Meta analytics, and UTM campaign
+tagging on every outbound click.
 
 Not yet built (each needs a real design/provider decision before it's
 worth building, rather than a half-working stub):
 
 - **Horizontal carousel** — swipeable row of square cards (e.g. podcast
   episodes)
-- **Rich embed link** — paste a Spotify/YouTube/SoundCloud URL and
-  auto-pull its title/thumbnail (oEmbed) with an inline player, instead of
-  manually filling in a title/thumbnail yourself
+- **Rich Spotify embed** — paste a Spotify track/album/playlist URL and get
+  an inline player the same way YouTube and SoundCloud already work
 - **Community link card** — a distinctly-styled Discord/Slack invite card
 - **Contact/booking form** — needs an outbound email provider decision
   (SMTP relay? a transactional email API?) before it can actually notify

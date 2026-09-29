@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { env } from './lib/env.js';
-import { loadLinks, saveLinks, flattenLinkItems, slugify, parseYoutubeId } from './lib/links.js';
+import { loadLinks, saveLinks, flattenLinkItems, slugify, parseYoutubeId, parseSoundcloudUrl } from './lib/links.js';
 import { recordClick, aggregateClicks } from './lib/clicks.js';
 import { renderPage, renderStats } from './lib/render.js';
 import { renderAdmin } from './lib/adminRender.js';
@@ -237,6 +237,18 @@ async function sanitizeAndPersistContent(rawSections, rawSocialLinks, previousIt
           );
         }
         items.push({ type: 'video', title: String(rawItem.title || '').trim().slice(0, 80), youtubeId: id });
+        continue;
+      }
+
+      if (rawItem.type === 'soundcloud') {
+        const soundcloudUrl = parseSoundcloudUrl(rawItem.soundcloudUrl);
+        if (!soundcloudUrl) {
+          throw Object.assign(
+            new Error(`"${rawItem.title || 'Untitled track'}" has an invalid SoundCloud URL`),
+            { statusCode: 400 }
+          );
+        }
+        items.push({ type: 'soundcloud', title: String(rawItem.title || '').trim().slice(0, 80), soundcloudUrl });
         continue;
       }
 

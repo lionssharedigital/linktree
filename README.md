@@ -71,10 +71,11 @@ then give its artist access again from the dashboard.
   - a **SoundCloud embed**: `title` (caption) and `soundcloudUrl` (a track,
     playlist, or user URL), rendered as SoundCloud's own inline player widget
     tinted with your accent color, or
-  - a **Bandsintown embed**: `title` (caption) and `artistName` (the artist's
-    name as registered on Bandsintown), rendered as Bandsintown's own
-    "upcoming shows" widget, showing the next few dates with venue, city, and
-    a tickets link.
+  - a **Bandsintown embed**: `title` (caption) and `attrs` (every `data-*`
+    attribute from the embed snippet Bandsintown's own widget-builder gives
+    the artist — artist/app IDs plus whatever colors and section toggles
+    they picked there), rendered as Bandsintown's own "upcoming shows"
+    widget.
 
   Separately, a top-level `socialLinks` array (`icon`, `url`, auto-generated
   `slug`) renders as a single row of icon-only buttons just below the bio
@@ -198,8 +199,10 @@ From it they can:
   emoji or an uploaded thumbnail image, and an optional custom slug),
   **YouTube videos** (paste any YouTube URL or a bare video ID — it's
   normalized automatically), **SoundCloud embeds** (paste any
-  soundcloud.com track/playlist/user URL), or **Bandsintown embeds**
-  (enter the artist's Bandsintown name to show their next few shows)
+  soundcloud.com track/playlist/user URL), or **Bandsintown embeds** (paste
+  the embed code from Bandsintown's own widget-builder — artist page →
+  Widgets → Embed Widget — including any colors or section toggles chosen
+  there)
 - Add, remove, and reorder **social icons** — pick a platform from a
   dropdown (Spotify, Instagram, YouTube, SoundCloud, TikTok, X, Facebook,
   Apple Music, Bandcamp, Twitch, Discord, LinkedIn, Telegram, WhatsApp,

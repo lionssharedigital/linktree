@@ -315,7 +315,7 @@ export function renderAdmin({ data, pageUrl, saveUrl, statsUrl, dashboardUrl, ge
         items: (s.items || []).map((it) => {
           if (it.type === 'video') return { type: 'video', title: it.title || '', youtubeId: it.youtubeId || '' };
           if (it.type === 'soundcloud') return { type: 'soundcloud', title: it.title || '', soundcloudUrl: it.soundcloudUrl || '' };
-          if (it.type === 'bandsintown') return { type: 'bandsintown', title: it.title || '', artistName: it.artistName || '' };
+          if (it.type === 'bandsintown') return { type: 'bandsintown', title: it.title || '', bandsintownEmbed: reconstructBandsintownEmbed(it.attrs) };
           return {
             type: 'link', style: it.style === 'featured' ? 'featured' : 'classic',
             title: it.title || '', url: it.url || '', emoji: it.emoji || '',
@@ -341,6 +341,16 @@ export function renderAdmin({ data, pageUrl, saveUrl, statsUrl, dashboardUrl, ge
 
     function escAttr(str) {
       return String(str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    }
+
+    // Saved Bandsintown items only keep the parsed data-* attributes, not
+    // the raw snippet — this rebuilds an equivalent snippet so the editor
+    // has something to show (and re-parse from) when reopened.
+    function reconstructBandsintownEmbed(attrs) {
+      const keys = Object.keys(attrs || {});
+      if (!keys.length) return '';
+      const attrLines = keys.map((k) => '\tdata-' + k + '="' + escAttr(attrs[k]) + '"').join('\n');
+      return '<a class="bit-widget-initializer"\n' + attrLines + '\n></a>';
     }
 
     function iconSvg(key) {
@@ -443,7 +453,7 @@ export function renderAdmin({ data, pageUrl, saveUrl, statsUrl, dashboardUrl, ge
           renderSections();
         });
         addRow.querySelector('[data-action="add-bandsintown"]').addEventListener('click', () => {
-          section.items.push({ type: 'bandsintown', title: '', artistName: '' });
+          section.items.push({ type: 'bandsintown', title: '', bandsintownEmbed: '' });
           renderSections();
         });
         block.appendChild(addRow);
@@ -485,7 +495,8 @@ export function renderAdmin({ data, pageUrl, saveUrl, statsUrl, dashboardUrl, ge
           <span class="item-type-badge">🎤 Bandsintown</span>
           <div class="fields">
             <input type="text" class="full" placeholder="Caption (optional)" maxlength="80" value="\${escAttr(item.title)}" data-field="title" />
-            <input type="text" class="full" placeholder="Bandsintown artist name" value="\${escAttr(item.artistName)}" data-field="artistName" />
+            <p class="hint">On Bandsintown, go to your artist page → Widgets → Embed Widget, customize it, and paste the full embed code below.</p>
+            <textarea class="full" rows="5" placeholder="Paste your Bandsintown embed code here" data-field="bandsintownEmbed">\${escAttr(item.bandsintownEmbed)}</textarea>
           </div>
           <div class="controls">
             <button type="button" class="icon-btn" data-action="up">↑</button>
@@ -754,7 +765,10 @@ export function renderAdmin({ data, pageUrl, saveUrl, statsUrl, dashboardUrl, ge
             } else if (item.type === 'soundcloud') {
               if (!item.soundcloudUrl.trim()) throw new Error('Every SoundCloud embed needs a track/playlist URL.');
             } else if (item.type === 'bandsintown') {
-              if (!item.artistName.trim()) throw new Error('Every Bandsintown embed needs an artist name.');
+              if (!item.bandsintownEmbed.trim()) throw new Error('Every Bandsintown embed needs the embed code pasted in.');
+              if (!/data-artist-name/.test(item.bandsintownEmbed) || !/data-app-id/.test(item.bandsintownEmbed)) {
+                throw new Error("That doesn't look like a Bandsintown embed code — paste the whole snippet Bandsintown gives you.");
+              }
             }
           }
         }

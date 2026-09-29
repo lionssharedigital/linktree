@@ -6,7 +6,7 @@ import {
   slugify,
   parseYoutubeId,
   parseSoundcloudUrl,
-  parseBandsintownArtistName,
+  parseBandsintownEmbed,
   flattenLinkItems,
   nextUniqueSlug,
   PAGE_SLUG_RE,
@@ -261,9 +261,14 @@ async function sanitizeAndPersistContent(app, pageSlug, rawSections, rawSocialLi
       }
 
       if (rawItem.type === 'bandsintown') {
-        const artistName = parseBandsintownArtistName(rawItem.artistName);
-        if (!artistName) throw httpError(400, 'Bandsintown embed needs an artist name');
-        items.push({ type: 'bandsintown', title: String(rawItem.title || '').trim().slice(0, 80), artistName });
+        const attrs = parseBandsintownEmbed(rawItem.bandsintownEmbed);
+        if (!attrs) {
+          throw httpError(
+            400,
+            'Paste the full Bandsintown embed code (from Bandsintown\'s widget tool) — couldn\'t find the artist and app IDs in it'
+          );
+        }
+        items.push({ type: 'bandsintown', title: String(rawItem.title || '').trim().slice(0, 80), attrs });
         continue;
       }
 

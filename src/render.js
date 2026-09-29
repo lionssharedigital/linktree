@@ -147,8 +147,9 @@ export const BASE_STYLES = `
   }
 
   .bandsintown-embed {
-    width: 100%; border-radius: 14px; overflow: hidden; padding: 4px;
-    background: var(--card); border: 1px solid var(--card-border); box-shadow: var(--shadow);
+    /* No background/border here — the widget renders its own chrome using
+       whatever colors the artist picked in Bandsintown's widget builder. */
+    width: 100%; border-radius: 14px; overflow: hidden;
   }
   .bandsintown-caption {
     margin-top: 8px; font-size: 0.85rem; font-weight: 500; color: var(--fg); text-align: center;
@@ -229,24 +230,21 @@ function renderSoundcloudItem(item, accent) {
 }
 
 function renderBandsintownItem(item) {
-  if (!item.artistName) return '';
+  const attrs = item.attrs || {};
+  if (!attrs['artist-name'] || !attrs['app-id']) return '';
   const caption = item.title
     ? `<div class="bandsintown-caption">${esc(item.title)}</div>`
     : '';
+  // Echoes back whatever attributes Bandsintown's widget-builder put in the
+  // artist's own embed snippet (artist/app IDs, plus any color choices),
+  // rather than us guessing which cosmetic options to hardcode.
+  const attrHtml = Object.entries(attrs)
+    .map(([key, value]) => `data-${key}="${esc(value)}"`)
+    .join('\n            ');
   return `
       <div>
         <div class="bandsintown-embed">
-          <a
-            class="bit-widget-initializer"
-            data-artist-name="${esc(item.artistName)}"
-            data-display-limit="4"
-            data-display-local-dates="false"
-            data-display-past-dates="false"
-            data-auto-style="true"
-            data-display-start-time="false"
-            data-date-format="MMM D"
-            data-display-lineup="false"
-          ></a>
+          <a class="bit-widget-initializer" ${attrHtml}></a>
         </div>
         ${caption}
       </div>`;

@@ -73,12 +73,37 @@ export function parseSoundcloudUrl(input) {
   }
 }
 
-// Bandsintown artist names are opaque display strings (not URLs) used to
-// build the embed widget, so this just trims stray "@"/whitespace/length
-// rather than validating a format Bandsintown itself doesn't document.
-export function parseBandsintownArtistName(input) {
-  const str = String(input || '').trim().replace(/^@/, '');
-  return str ? str.slice(0, 80) : null;
+// Bandsintown's own widget-builder tool generates a full embed snippet per
+// artist — a required data-artist-name (often "id_<digits>", not a plain
+// name) and data-app-id, plus whatever color attributes the artist picked
+// (data-background-color, data-text-color, etc.). Rather than guess which
+// cosmetic attributes exist, this pulls every data-* attribute off the
+// pasted <a class="bit-widget-initializer"> tag and echoes them back as-is.
+export function sanitizeBandsintownAttrs(raw) {
+  const attrs = {};
+  if (raw && typeof raw === 'object') {
+    for (const [key, value] of Object.entries(raw)) {
+      if (!/^[a-z-]{1,40}$/.test(key)) continue;
+      if (Object.keys(attrs).length >= 20) break;
+      attrs[key] = String(value ?? '').trim().slice(0, 200);
+    }
+  }
+  return attrs;
+}
+
+const BANDSINTOWN_ATTR_RE = /data-([a-z-]+)\s*=\s*["']([^"']*)["']/g;
+
+export function parseBandsintownEmbed(input) {
+  const str = String(input || '').slice(0, 4000);
+  const attrs = {};
+  let match;
+  BANDSINTOWN_ATTR_RE.lastIndex = 0;
+  while ((match = BANDSINTOWN_ATTR_RE.exec(str))) {
+    if (Object.keys(attrs).length >= 20) break;
+    attrs[match[1]] = match[2].trim().slice(0, 200);
+  }
+  if (!attrs['artist-name'] || !attrs['app-id']) return null;
+  return attrs;
 }
 
 // Old flat `links: [...]` files (pre-sections) get wrapped into a single
@@ -114,7 +139,7 @@ function normalizeSections(sections, seenSlugs) {
         return { type: 'soundcloud', title: item.title || '', soundcloudUrl: item.soundcloudUrl || '' };
       }
       if (item.type === 'bandsintown') {
-        return { type: 'bandsintown', title: item.title || '', artistName: item.artistName || '' };
+        return { type: 'bandsintown', title: item.title || '', attrs: sanitizeBandsintownAttrs(item.attrs) };
       }
       const rawSlug = item.slug ? slugify(item.slug) : slugify(item.title || '');
       return {

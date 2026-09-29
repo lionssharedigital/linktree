@@ -107,7 +107,10 @@ export const ADMIN_STYLES = `
   .status.err { color: #e5484d; }
 `;
 
-export function renderAdmin({ data, pageUrl, saveUrl, statsUrl, dashboardUrl, generatedOgUrl, ogPreviewSrc }) {
+export function renderAdmin({ data, themes = [], pageUrl, saveUrl, statsUrl, dashboardUrl, generatedOgUrl, ogPreviewSrc }) {
+  const themeOptions = themes
+    .map((t) => `<option value="${esc(t.id)}"${t.id === data.themeId ? ' selected' : ''}>${esc(t.name)}</option>`)
+    .join('');
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -191,10 +194,18 @@ export function renderAdmin({ data, pageUrl, saveUrl, statsUrl, dashboardUrl, ge
     <fieldset>
       <legend>Appearance</legend>
 
+      <label for="f-theme">Theme</label>
+      <select id="f-theme">
+        <option value="">No theme — use this page's own colors below</option>
+        ${themeOptions}
+      </select>
+      <div class="hint">Themes are built by an admin at <a href="/admin/themes">/admin/themes</a>. Any color/style field below left blank uses the theme's value instead.</div>
+
       <label for="f-accent">Accent color</label>
       <div class="color-field">
         <input type="color" id="f-accent-picker" />
-        <input type="text" id="f-accent" maxlength="20" />
+        <input type="text" id="f-accent" maxlength="20" placeholder="theme default" />
+        <button type="button" class="icon-btn" id="f-accent-clear">Use theme default</button>
       </div>
       <div class="hint">Used for hover states and the OG preview image.</div>
 
@@ -219,18 +230,21 @@ export function renderAdmin({ data, pageUrl, saveUrl, statsUrl, dashboardUrl, ge
         <button type="button" class="icon-btn" id="f-box-clear">No box</button>
       </div>
       <div class="hint">Wraps your avatar, bio, and links in a colored card, like Linktree's card layout. Leave blank for no box.</div>
-      <div class="hint">Leave background/section/box blank to keep following the visitor's light/dark mode automatically.</div>
+      <div class="hint">Leave background/section/box blank to keep following the visitor's light/dark mode automatically (or the theme's value, if one is selected).</div>
 
       <label for="f-avatar-style">Avatar style</label>
       <select id="f-avatar-style">
-        <option value="circle">Circle (default)</option>
+        <option value="">Use theme default</option>
+        <option value="circle">Circle</option>
         <option value="hero">Hero — large image fading into the background</option>
       </select>
 
-      <label class="row-inline" style="margin-top: 14px; cursor: pointer;">
-        <input type="checkbox" id="f-sharp-corners" style="width: auto; margin: 0;" />
-        <span style="font-weight: 600; color: var(--fg);">Sharp corners on link buttons (no rounding)</span>
-      </label>
+      <label for="f-sharp-corners">Corners</label>
+      <select id="f-sharp-corners">
+        <option value="">Use theme default</option>
+        <option value="false">Rounded</option>
+        <option value="true">Sharp (no rounding on link buttons)</option>
+      </select>
     </fieldset>
 
     <fieldset>
@@ -287,12 +301,17 @@ export function renderAdmin({ data, pageUrl, saveUrl, statsUrl, dashboardUrl, ge
     const state = {
       name: initial.name || '',
       bio: initial.bio || '',
-      accent: initial.accent || '#7c5cff',
+      themeId: initial.themeId || '',
+      accent: initial.accent || '',
       backgroundColor: initial.backgroundColor || '',
       sectionColor: initial.sectionColor || '',
       contentBoxColor: initial.contentBoxColor || '',
-      sharpCorners: Boolean(initial.sharpCorners),
-      avatarStyle: initial.avatarStyle === 'hero' ? 'hero' : 'circle',
+      sharpCorners: initial.sharpCorners === true || initial.sharpCorners === 'true'
+        ? 'true'
+        : initial.sharpCorners === false || initial.sharpCorners === 'false'
+          ? 'false'
+          : '',
+      avatarStyle: initial.avatarStyle === 'hero' || initial.avatarStyle === 'circle' ? initial.avatarStyle : '',
       utmSource: initial.utmSource || '',
       utmMedium: initial.utmMedium || '',
       utmCampaign: initial.utmCampaign || '',
@@ -349,8 +368,8 @@ export function renderAdmin({ data, pageUrl, saveUrl, statsUrl, dashboardUrl, ge
     function reconstructBandsintownEmbed(attrs) {
       const keys = Object.keys(attrs || {});
       if (!keys.length) return '';
-      const attrLines = keys.map((k) => '\tdata-' + k + '="' + escAttr(attrs[k]) + '"').join('\n');
-      return '<a class="bit-widget-initializer"\n' + attrLines + '\n></a>';
+      const attrLines = keys.map((k) => '\\tdata-' + k + '="' + escAttr(attrs[k]) + '"').join('\\n');
+      return '<a class="bit-widget-initializer"\\n' + attrLines + '\\n></a>';
     }
 
     function iconSvg(key) {
@@ -583,6 +602,7 @@ export function renderAdmin({ data, pageUrl, saveUrl, statsUrl, dashboardUrl, ge
     el('f-seo-desc').value = state.seoDescription;
     el('f-og-title').value = state.ogTitle;
     el('f-og-desc').value = state.ogDescription;
+    el('f-theme').value = state.themeId;
     el('f-accent').value = state.accent;
     el('f-accent-picker').value = /^#[0-9a-fA-F]{6}$/.test(state.accent) ? state.accent : '#7c5cff';
     el('f-bg').value = state.backgroundColor;
@@ -595,7 +615,7 @@ export function renderAdmin({ data, pageUrl, saveUrl, statsUrl, dashboardUrl, ge
     el('f-ads').value = state.googleAdsId;
     el('f-fbpixel').value = state.facebookPixelId;
     el('f-avatar-style').value = state.avatarStyle;
-    el('f-sharp-corners').checked = state.sharpCorners;
+    el('f-sharp-corners').value = state.sharpCorners;
     el('f-utm-source').value = state.utmSource;
     el('f-utm-medium').value = state.utmMedium;
     el('f-utm-campaign').value = state.utmCampaign;
@@ -609,8 +629,9 @@ export function renderAdmin({ data, pageUrl, saveUrl, statsUrl, dashboardUrl, ge
     el('f-ga').addEventListener('input', (e) => { state.googleAnalyticsId = e.target.value.trim(); });
     el('f-ads').addEventListener('input', (e) => { state.googleAdsId = e.target.value.trim(); });
     el('f-fbpixel').addEventListener('input', (e) => { state.facebookPixelId = e.target.value.trim(); });
+    el('f-theme').addEventListener('change', (e) => { state.themeId = e.target.value; });
     el('f-avatar-style').addEventListener('change', (e) => { state.avatarStyle = e.target.value; });
-    el('f-sharp-corners').addEventListener('change', (e) => { state.sharpCorners = e.target.checked; });
+    el('f-sharp-corners').addEventListener('change', (e) => { state.sharpCorners = e.target.value; });
     el('f-utm-source').addEventListener('input', (e) => { state.utmSource = e.target.value; });
     el('f-utm-medium').addEventListener('input', (e) => { state.utmMedium = e.target.value; });
     el('f-utm-campaign').addEventListener('input', (e) => { state.utmCampaign = e.target.value; });
@@ -631,7 +652,7 @@ export function renderAdmin({ data, pageUrl, saveUrl, statsUrl, dashboardUrl, ge
         });
       }
     }
-    wireColor('f-accent', 'f-accent-picker', null, 'accent');
+    wireColor('f-accent', 'f-accent-picker', 'f-accent-clear', 'accent');
     wireColor('f-bg', 'f-bg-picker', 'f-bg-clear', 'backgroundColor');
     wireColor('f-section', 'f-section-picker', 'f-section-clear', 'sectionColor');
     wireColor('f-box', 'f-box-picker', 'f-box-clear', 'contentBoxColor');

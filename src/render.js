@@ -25,6 +25,28 @@ function contrastPalette(hex) {
   return lum > 0.6 ? { fg: '#141414', muted: '#5c5a57' } : { fg: '#f5f4f2', muted: '#a3a1a0' };
 }
 
+const FONT_STACKS = {
+  poppins: '"Poppins", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+  system: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+  mono: '"SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace',
+};
+
+// sharpCorners/avatarStyle predate theme inheritance and used to always be a
+// concrete boolean / enum — old stored values are treated as an explicit
+// page-level choice (not blank/inherit) so pages saved before themes shipped
+// render exactly as before. Only a genuinely blank value (only possible on
+// pages saved after themes shipped) inherits from the theme.
+function resolveSharpCorners(pageValue, themeValue) {
+  if (pageValue === true || pageValue === 'true') return true;
+  if (pageValue === false || pageValue === 'false') return false;
+  return themeValue === true || themeValue === 'true';
+}
+function resolveAvatarStyle(pageValue, themeValue) {
+  if (pageValue === 'hero' || pageValue === 'circle') return pageValue;
+  if (themeValue === 'hero' || themeValue === 'circle') return themeValue;
+  return 'circle';
+}
+
 export const BASE_STYLES = `
   :root {
     --bg: #f6f5f3;
@@ -167,6 +189,7 @@ export const BASE_STYLES = `
   .social-icon:hover { transform: translateY(-2px); border-color: var(--accent); }
   .social-icon:active { transform: translateY(0); }
   .social-icon svg { width: 20px; height: 20px; }
+  .social-row.outline .social-icon { background: transparent; box-shadow: none; }
 
   footer { margin-top: 40px; color: var(--muted); font-size: 0.78rem; text-align: center; }
   footer a { color: inherit; }
@@ -272,7 +295,7 @@ function renderSections(sections, basePath, accent) {
     .join('');
 }
 
-function renderSocialRow(socialLinks, basePath) {
+function renderSocialRow(socialLinks, basePath, socialIconStyle) {
   if (!socialLinks || !socialLinks.length) return '';
   const icons = socialLinks
     .map((s) => {
@@ -281,9 +304,10 @@ function renderSocialRow(socialLinks, basePath) {
       return `<a class="social-icon" href="${esc(basePath)}/go/${esc(s.slug)}" target="_blank" rel="noopener noreferrer" aria-label="${esc(s.icon)}">${svg}</a>`;
     })
     .join('');
+  const rowClass = socialIconStyle === 'outline' ? 'social-row outline' : 'social-row';
   return `
     <div class="section">
-      <div class="social-row">${icons}</div>
+      <div class="${rowClass}">${icons}</div>
     </div>`;
 }
 
@@ -354,6 +378,7 @@ export function renderPage({
   contentBoxColor,
   sharpCorners,
   avatarStyle,
+  theme,
   googleAnalyticsId,
   googleAdsId,
   facebookPixelId,
@@ -373,14 +398,32 @@ export function renderPage({
   const isGeneratedOgImage = Boolean(ogImageIsGenerated);
   const faviconHref = favicon || avatar;
 
+  // A page's own field wins if set; otherwise the active theme's value;
+  // otherwise the hardcoded fallback.
+  const resolvedAccent = accent || theme?.accent || '';
+  const resolvedBackgroundColor = backgroundColor || theme?.backgroundColor || '';
+  const resolvedSectionColor = sectionColor || theme?.sectionColor || '';
+  const resolvedContentBoxColor = contentBoxColor || theme?.contentBoxColor || '';
+  const resolvedSharpCorners = resolveSharpCorners(sharpCorners, theme?.sharpCorners);
+  const resolvedAvatarStyle = resolveAvatarStyle(avatarStyle, theme?.avatarStyle);
+  const cardStyle = theme?.cardStyle === 'flat' ? 'flat' : 'bordered';
+  const socialIconStyle = theme?.socialIconStyle === 'outline' ? 'outline' : 'filled';
+  const fontFamily = FONT_STACKS[theme?.fontStack] || FONT_STACKS.poppins;
+
   const overrides = [];
-  if (HEX_RE.test(accent || '')) overrides.push(`--accent:${accent};`);
-  const bgPalette = contrastPalette(backgroundColor);
-  if (bgPalette) overrides.push(`--bg:${backgroundColor};--fg:${bgPalette.fg};--muted:${bgPalette.muted};`);
-  if (HEX_RE.test(sectionColor || '')) overrides.push(`--card:${sectionColor};`);
+  if (HEX_RE.test(resolvedAccent || '')) overrides.push(`--accent:${resolvedAccent};`);
+  const bgPalette = contrastPalette(resolvedBackgroundColor);
+  if (bgPalette) overrides.push(`--bg:${resolvedBackgroundColor};--fg:${bgPalette.fg};--muted:${bgPalette.muted};`);
+  if (HEX_RE.test(resolvedSectionColor || '')) overrides.push(`--card:${resolvedSectionColor};`);
   let colorOverrideStyle = overrides.length ? `:root{${overrides.join('')}}` : '';
-  if (HEX_RE.test(contentBoxColor || '')) {
-    colorOverrideStyle += `.content-box{background:${contentBoxColor};padding:32px 20px 28px;border-radius:20px;border:1px solid var(--card-border);box-shadow:var(--shadow);}`;
+  if (HEX_RE.test(resolvedContentBoxColor || '')) {
+    colorOverrideStyle += `.content-box{background:${resolvedContentBoxColor};padding:32px 20px 28px;border-radius:20px;border:1px solid var(--card-border);box-shadow:var(--shadow);}`;
+  }
+  if (cardStyle === 'flat') {
+    colorOverrideStyle += `:root{--card-border:transparent;--shadow:none;}`;
+  }
+  if (theme?.fontStack && theme.fontStack !== 'poppins') {
+    colorOverrideStyle += `body{font-family:${fontFamily};}`;
   }
 
   const hasVideo = (sections || []).some((s) => (s.items || []).some((i) => i.type === 'video'));
@@ -412,18 +455,18 @@ export function renderPage({
   ${renderAnalytics(googleAnalyticsId, googleAdsId)}
   ${renderFacebookPixel(facebookPixelId)}
 </head>
-<body${sharpCorners ? ' class="sharp-corners"' : ''}>
+<body${resolvedSharpCorners ? ' class="sharp-corners"' : ''}>
   <div class="page">
     <div class="content-box">
       ${
-        avatarStyle === 'hero'
+        resolvedAvatarStyle === 'hero'
           ? `<img class="avatar-hero" src="${esc(avatar)}" alt="${title}" />`
           : `<img class="avatar" src="${esc(avatar)}" alt="${title}" width="96" height="96" />`
       }
       <h1>${title}</h1>
       <p class="bio">${description}</p>
-      ${renderSocialRow(socialLinks || [], basePath)}
-      ${renderSections(sections || [], basePath, accent)}
+      ${renderSocialRow(socialLinks || [], basePath, socialIconStyle)}
+      ${renderSections(sections || [], basePath, resolvedAccent)}
     </div>
     <footer>&copy; ${new Date().getFullYear()} ${title}</footer>
   </div>

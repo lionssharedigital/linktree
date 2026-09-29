@@ -130,8 +130,12 @@ export async function canEditPage(db, user, slug) {
 // ---- Pages ---------------------------------------------------------------
 
 export async function getPageContent(db, slug) {
-  const row = await db.prepare('SELECT content FROM pages WHERE slug = ? AND archived_at IS NULL').bind(slug).first();
-  return row ? normalizeContent(JSON.parse(row.content)) : null;
+  const row = await db
+    .prepare('SELECT content, theme_id FROM pages WHERE slug = ? AND archived_at IS NULL')
+    .bind(slug)
+    .first();
+  if (!row) return null;
+  return { ...normalizeContent(JSON.parse(row.content)), themeId: row.theme_id || '' };
 }
 
 export async function pageExists(db, slug) {
@@ -163,11 +167,12 @@ export async function createPage(db, slug, content) {
 
 export async function savePageContent(db, slug, content) {
   const normalized = normalizeContent(content);
+  const themeId = String(content.themeId || '');
   await db
-    .prepare('UPDATE pages SET content = ?, updated_at = ? WHERE slug = ?')
-    .bind(JSON.stringify(normalized), nowIso(), slug)
+    .prepare('UPDATE pages SET content = ?, theme_id = ?, updated_at = ? WHERE slug = ?')
+    .bind(JSON.stringify(normalized), themeId, nowIso(), slug)
     .run();
-  return normalized;
+  return { ...normalized, themeId };
 }
 
 // Takes the page offline and removes everyone's access and open invites.
@@ -179,6 +184,64 @@ export async function archivePage(db, slug) {
     db.prepare('UPDATE pages SET archived_at = ? WHERE slug = ?').bind(nowIso(), slug),
     db.prepare('DELETE FROM page_members WHERE page_slug = ?').bind(slug),
     db.prepare('DELETE FROM invites WHERE page_slug = ?').bind(slug),
+  ]);
+}
+
+// ---- Themes ---------------------------------------------------------------
+// Admin-managed, reusable style presets. `config` is pre-validated by the
+// caller (see worker.js parseStyleFields/parseThemeOnlyFields) before it
+// reaches these functions — same division of labor as pages, where db.js
+// only persists, and worker.js validates.
+
+function toTheme(row) {
+  return (
+    row && {
+      id: row.id,
+      name: row.name,
+      config: JSON.parse(row.config),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }
+  );
+}
+
+export async function listThemes(db) {
+  const { results } = await db.prepare('SELECT * FROM themes ORDER BY name').all();
+  return results.map(toTheme);
+}
+
+export async function getTheme(db, id) {
+  if (!id) return null;
+  const row = await db.prepare('SELECT * FROM themes WHERE id = ?').bind(id).first();
+  return toTheme(row);
+}
+
+export async function createTheme(db, { name, config }) {
+  const id = crypto.randomUUID();
+  const now = nowIso();
+  await db
+    .prepare('INSERT INTO themes (id, name, config, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
+    .bind(id, name, JSON.stringify(config), now, now)
+    .run();
+  return { id, name, config, createdAt: now, updatedAt: now };
+}
+
+export async function updateTheme(db, id, { name, config }) {
+  const now = nowIso();
+  await db
+    .prepare('UPDATE themes SET name = ?, config = ?, updated_at = ? WHERE id = ?')
+    .bind(name, JSON.stringify(config), now, id)
+    .run();
+  return { id, name, config, updatedAt: now };
+}
+
+// Clears theme_id on any pages using this theme first (explicit app-level
+// cascade, same approach archivePage uses) so no page is left pointing at a
+// deleted theme.
+export async function deleteTheme(db, id) {
+  await db.batch([
+    db.prepare("UPDATE pages SET theme_id = '' WHERE theme_id = ?").bind(id),
+    db.prepare('DELETE FROM themes WHERE id = ?').bind(id),
   ]);
 }
 

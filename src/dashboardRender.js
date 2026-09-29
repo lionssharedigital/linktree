@@ -381,6 +381,15 @@ export function renderDashboard({ user, pages, users, invites, pageNames, siteUr
     </fieldset>`
     : '';
 
+  const themesBlock = isAdmin
+    ? `
+    <fieldset>
+      <legend>Themes</legend>
+      <p class="hint">Reusable style presets pages can apply.</p>
+      <a class="icon-btn" href="/admin/themes">Manage themes →</a>
+    </fieldset>`
+    : '';
+
   return layout({
     title: 'Dashboard',
     body: `
@@ -389,6 +398,7 @@ export function renderDashboard({ user, pages, users, invites, pageNames, siteUr
     <h1>${isAdmin ? 'Pages' : 'Your pages'}</h1>
     ${pagesBlock}
     ${createPageBlock}
+    ${themesBlock}
     ${usersBlock}
     ${invitesBlock}
     ${archiveBlock}

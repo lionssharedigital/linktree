@@ -14,6 +14,7 @@ import {
 import * as db from './db.js';
 import { renderPage, renderStats } from './render.js';
 import { renderAdmin } from './adminRender.js';
+import { renderThemes } from './themeRender.js';
 import { renderLogin, renderInvite, renderDashboard, renderMessage } from './dashboardRender.js';
 import { SOCIAL_ICONS } from './icons.js';
 import { hashPassword, verifyPassword, validateNewPassword, sessionCookie, clearSessionCookie, readSession } from './auth.js';
@@ -207,6 +208,39 @@ function optionalHexColor(value, label) {
   return value;
 }
 
+const FONT_STACK_VALUES = new Set(['poppins', 'system', 'mono']);
+
+// The six style fields a page and a theme both share. When `allowInherit` is
+// true (page saves), blank means "use the active theme's value, or the app
+// default" — themes themselves can't inherit from anything, so theme saves
+// pass allowInherit: false and get concrete defaults instead of blanks.
+function parseStyleFields(body, { allowInherit }) {
+  const sharpCorners =
+    body.sharpCorners === 'true' || body.sharpCorners === true
+      ? 'true'
+      : body.sharpCorners === 'false' || body.sharpCorners === false
+        ? 'false'
+        : '';
+  const avatarStyle = body.avatarStyle === 'hero' || body.avatarStyle === 'circle' ? body.avatarStyle : '';
+  return {
+    accent: optionalHexColor(body.accent, 'accent color'),
+    backgroundColor: optionalHexColor(body.backgroundColor, 'background color'),
+    sectionColor: optionalHexColor(body.sectionColor, 'section color'),
+    contentBoxColor: optionalHexColor(body.contentBoxColor, 'content box color'),
+    sharpCorners: allowInherit ? sharpCorners : sharpCorners || 'false',
+    avatarStyle: allowInherit ? avatarStyle : avatarStyle || 'circle',
+  };
+}
+
+// Theme-only fields — no per-page override in v1.
+function parseThemeOnlyFields(body) {
+  return {
+    cardStyle: body.cardStyle === 'flat' ? 'flat' : 'bordered',
+    socialIconStyle: body.socialIconStyle === 'outline' ? 'outline' : 'filled',
+    fontStack: FONT_STACK_VALUES.has(body.fontStack) ? body.fontStack : 'poppins',
+  };
+}
+
 // A link's existing `image` must be this page's own upload or a shared
 // built-in asset from public/ — never another page's media or an arbitrary URL.
 function sanitizeExistingImage(pageSlug, value) {
@@ -323,12 +357,8 @@ async function savePage(app, pageSlug, body) {
     seoDescription: String(body.seoDescription || '').trim().slice(0, 160),
     ogTitle: String(body.ogTitle || '').trim().slice(0, 120),
     ogDescription: String(body.ogDescription || '').trim().slice(0, 300),
-    accent: HEX_RE.test(body.accent || '') ? body.accent : current.accent,
-    backgroundColor: optionalHexColor(body.backgroundColor, 'background color'),
-    sectionColor: optionalHexColor(body.sectionColor, 'section color'),
-    contentBoxColor: optionalHexColor(body.contentBoxColor, 'content box color'),
-    sharpCorners: Boolean(body.sharpCorners),
-    avatarStyle: body.avatarStyle === 'hero' ? 'hero' : 'circle',
+    ...parseStyleFields(body, { allowInherit: true }),
+    themeId: String(body.themeId || ''),
     utmSource: String(body.utmSource || '').trim().slice(0, 60),
     utmMedium: String(body.utmMedium || '').trim().slice(0, 60),
     utmCampaign: String(body.utmCampaign || '').trim().slice(0, 60),
@@ -402,8 +432,10 @@ async function renderPublicPage(app, request, pageSlug, { atRoot = false } = {})
   // Fallback chain for the share image: custom upload -> generated card ->
   // avatar (for a page that hasn't been saved in the editor yet).
   const ogImage = data.ogImage || (data.ogGenerated ? generatedOgUrl(pageSlug) : data.avatar);
+  const theme = data.themeId ? await db.getTheme(app.db, data.themeId) : null;
   const html = renderPage({
     ...data,
+    theme: theme?.config || null,
     siteUrl: app.siteUrl,
     basePath: `/${pageSlug}`,
     canonicalUrl: atRoot ? `${app.siteUrl}/` : `${app.siteUrl}/${pageSlug}`,
@@ -467,6 +499,27 @@ function handleAdminApi(app, request, parts) {
 
     if (resource === 'pages' && id === 'archive') {
       await db.archivePage(app.db, String(body.page || ''));
+      return {};
+    }
+
+    if (resource === 'themes' && !id) {
+      const name = String(body.name || '').trim().slice(0, 60);
+      if (!name) throw httpError(400, 'Theme name is required');
+      const config = { ...parseStyleFields(body, { allowInherit: false }), ...parseThemeOnlyFields(body) };
+      const theme = await db.createTheme(app.db, { name, config });
+      return { theme };
+    }
+
+    if (resource === 'themes' && id && !action) {
+      const name = String(body.name || '').trim().slice(0, 60);
+      if (!name) throw httpError(400, 'Theme name is required');
+      const config = { ...parseStyleFields(body, { allowInherit: false }), ...parseThemeOnlyFields(body) };
+      const theme = await db.updateTheme(app.db, id, { name, config });
+      return { theme };
+    }
+
+    if (resource === 'themes' && id && action === 'delete') {
+      await db.deleteTheme(app.db, id);
       return {};
     }
 
@@ -670,6 +723,15 @@ async function route(request, env, ctx) {
       return htmlResponse(request, await renderDashboardFor(app, user), 200, { 'Cache-Control': 'no-store' });
     }
 
+    if (parts[1] === 'themes' && parts.length === 2) {
+      if (!isRead) return methodNotAllowed('GET, HEAD');
+      const user = await currentUser(app, request);
+      if (!user) return redirect(`/login?next=${encodeURIComponent(pathname)}`);
+      if (user.role !== 'admin') return notFound(request);
+      const themes = await db.listThemes(app.db);
+      return htmlResponse(request, renderThemes({ themes, dashboardUrl: '/admin' }), 200, { 'Cache-Control': 'no-store' });
+    }
+
     if (parts[1] === 'pages' && parts[2]) {
       const pageSlug = parts[2];
       const sub = parts[3] || '';
@@ -690,8 +752,10 @@ async function route(request, env, ctx) {
 
       const data = await db.getPageContent(app.db, pageSlug);
       if (!sub) {
+        const themes = await db.listThemes(app.db);
         const html = renderAdmin({
           data,
+          themes: themes.map((t) => ({ id: t.id, name: t.name })),
           pageUrl: `/${pageSlug}`,
           saveUrl: `/admin/pages/${pageSlug}/save`,
           statsUrl: `/admin/pages/${pageSlug}/stats`,

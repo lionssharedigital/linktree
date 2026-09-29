@@ -106,6 +106,16 @@ export function parseBandsintownEmbed(input) {
   return attrs;
 }
 
+// A show's date is a plain "YYYY-MM-DD" (no time/timezone) — shows are
+// filtered to today-or-later at render time using UTC day boundaries, so
+// this just checks the format is well-formed and resolves to a real date.
+export function parseShowDate(input) {
+  const str = String(input || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(str)) return null;
+  const d = new Date(str + 'T00:00:00Z');
+  return Number.isNaN(d.getTime()) ? null : str;
+}
+
 // Old flat `links: [...]` files (pre-sections) get wrapped into a single
 // untitled section so imported legacy content keeps working.
 function migrateToSections(data) {
@@ -131,6 +141,7 @@ export function nextUniqueSlug(rawSlug, seenSlugs) {
 function normalizeSections(sections, seenSlugs) {
   return (sections || []).map((section) => ({
     title: section.title || '',
+    layout: section.layout === 'carousel' ? 'carousel' : 'list',
     items: (section.items || []).map((item) => {
       if (item.type === 'video') {
         return { type: 'video', title: item.title || '', youtubeId: item.youtubeId || '' };
@@ -140,6 +151,31 @@ function normalizeSections(sections, seenSlugs) {
       }
       if (item.type === 'bandsintown') {
         return { type: 'bandsintown', title: item.title || '', attrs: sanitizeBandsintownAttrs(item.attrs) };
+      }
+      if (item.type === 'track') {
+        return {
+          type: 'track',
+          title: item.title || '',
+          subtitle: item.subtitle || '',
+          image: item.image || '',
+          links: (item.links || []).map((l) => {
+            const rawLinkSlug = l.slug ? slugify(l.slug) : slugify(l.label || item.title || 'link');
+            return { label: l.label || '', url: l.url || '', slug: nextUniqueSlug(rawLinkSlug, seenSlugs) };
+          }),
+        };
+      }
+      if (item.type === 'show') {
+        const ticketUrl = item.ticketUrl || '';
+        const rawSlug = item.slug ? slugify(item.slug) : slugify(item.title || 'show');
+        return {
+          type: 'show',
+          title: item.title || '',
+          date: item.date || '',
+          venue: item.venue || '',
+          location: item.location || '',
+          ticketUrl,
+          slug: ticketUrl ? nextUniqueSlug(rawSlug, seenSlugs) : '',
+        };
       }
       const rawSlug = item.slug ? slugify(item.slug) : slugify(item.title || '');
       return {
@@ -180,6 +216,10 @@ export function flattenLinkItems(data) {
   for (const section of data.sections || []) {
     for (const item of section.items || []) {
       if (item.type === 'link') items.push(item);
+      if (item.type === 'show' && item.ticketUrl) items.push({ ...item, url: item.ticketUrl });
+      if (item.type === 'track') {
+        for (const l of item.links || []) items.push({ title: l.label, url: l.url, emoji: '', slug: l.slug });
+      }
     }
   }
   for (const social of data.socialLinks || []) {

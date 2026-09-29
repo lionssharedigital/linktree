@@ -100,6 +100,24 @@ export const BASE_STYLES = `
   }
   .items { width: 100%; display: flex; flex-direction: column; gap: 12px; }
 
+  .carousel-wrap { position: relative; width: 100%; }
+  .items.carousel {
+    flex-direction: row; overflow-x: auto; scroll-snap-type: x mandatory;
+    padding-bottom: 2px; scrollbar-width: none;
+  }
+  .items.carousel::-webkit-scrollbar { display: none; }
+  .items.carousel > * { flex: none; width: 150px; scroll-snap-align: start; }
+  .items.carousel .link-featured .title-featured { font-size: 0.85rem; }
+  .carousel-arrow {
+    position: absolute; top: 50%; transform: translateY(-50%); z-index: 1;
+    width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--card-border);
+    background: var(--card); color: var(--fg); box-shadow: var(--shadow); cursor: pointer;
+    display: flex; align-items: center; justify-content: center; font-size: 1.1rem; padding: 0;
+  }
+  .carousel-prev { left: -6px; }
+  .carousel-next { right: -6px; }
+  @media (hover: none) { .carousel-arrow { display: none; } }
+
   .link {
     display: flex; align-items: center; gap: 10px;
     width: 100%; padding: 14px 18px; border-radius: 14px;
@@ -176,6 +194,45 @@ export const BASE_STYLES = `
   .bandsintown-caption {
     margin-top: 8px; font-size: 0.85rem; font-weight: 500; color: var(--fg); text-align: center;
   }
+
+  .show-card {
+    display: flex; align-items: center; gap: 14px; width: 100%; padding: 12px 16px;
+    border-radius: 14px; background: var(--card); border: 1px solid var(--card-border); box-shadow: var(--shadow);
+  }
+  .show-date {
+    flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    width: 54px; padding: 6px 0; border-radius: 10px; background: var(--bg); border: 1px solid var(--card-border);
+  }
+  .show-month { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em; color: var(--accent); }
+  .show-day { font-size: 1.3rem; font-weight: 700; line-height: 1.1; }
+  .show-year { font-size: 0.65rem; color: var(--muted); }
+  .show-info { flex: 1; min-width: 0; }
+  .show-title { font-weight: 600; font-size: 0.95rem; }
+  .show-venue { font-size: 0.82rem; color: var(--muted); margin-top: 2px; }
+  .show-ticket {
+    display: inline-block; margin-top: 8px; padding: 6px 14px; border-radius: 999px;
+    background: var(--accent); color: #fff; font-size: 0.78rem; font-weight: 600;
+    text-decoration: none;
+  }
+  .items.carousel .show-card { flex-direction: column; width: 160px; padding: 12px; text-align: center; }
+  .items.carousel .show-info { width: 100%; }
+
+  .track-card {
+    width: 100%; padding: 12px 16px; border-radius: 14px;
+    background: var(--card); border: 1px solid var(--card-border); box-shadow: var(--shadow);
+  }
+  .track-head { display: flex; align-items: center; gap: 12px; }
+  .track-thumb { width: 52px; height: 52px; border-radius: 10px; object-fit: cover; flex: none; }
+  .track-text { flex: 1; min-width: 0; }
+  .track-title { font-weight: 600; font-size: 0.95rem; }
+  .track-subtitle { font-size: 0.8rem; color: var(--muted); margin-top: 1px; }
+  .track-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .track-pill {
+    padding: 5px 12px; border-radius: 999px; border: 1px solid var(--card-border);
+    background: var(--bg); color: var(--fg); font-size: 0.76rem; font-weight: 600; text-decoration: none;
+  }
+  .track-pill:hover { border-color: var(--accent); color: var(--accent); }
+  .items.carousel .track-card { width: 170px; }
 
   .social-row {
     width: 100%; display: flex; flex-wrap: wrap; justify-content: center; gap: 12px;
@@ -273,6 +330,60 @@ function renderBandsintownItem(item) {
       </div>`;
 }
 
+const SHOW_MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+
+function renderTrackItem(item, basePath) {
+  if (!item.links || !item.links.length) return '';
+  const thumb = item.image ? `<img class="track-thumb" src="${esc(item.image)}" alt="" loading="lazy" />` : '';
+  const pills = item.links
+    .map(
+      (l) =>
+        `<a class="track-pill" href="${esc(basePath)}/go/${esc(l.slug)}" target="_blank" rel="noopener noreferrer">${esc(l.label)}</a>`
+    )
+    .join('');
+  return `
+      <div class="track-card">
+        <div class="track-head">
+          ${thumb}
+          <div class="track-text">
+            <div class="track-title">${esc(item.title)}</div>
+            ${item.subtitle ? `<div class="track-subtitle">${esc(item.subtitle)}</div>` : ''}
+          </div>
+        </div>
+        <div class="track-links">${pills}</div>
+      </div>`;
+}
+
+// Only today-or-later shows render, so the list never goes stale — no
+// separate "past shows" UI. Uses UTC day boundaries since item.date is a
+// plain "YYYY-MM-DD" with no timezone of its own.
+function renderShowItem(item, basePath) {
+  if (!item.date) return '';
+  const d = new Date(item.date + 'T00:00:00Z');
+  if (Number.isNaN(d.getTime())) return '';
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  if (d < today) return '';
+  const venueLine = [item.venue, item.location].filter(Boolean).join(' — ');
+  const ticket =
+    item.ticketUrl && item.slug
+      ? `<a class="show-ticket" href="${esc(basePath)}/go/${esc(item.slug)}" target="_blank" rel="noopener noreferrer">Tickets</a>`
+      : '';
+  return `
+      <div class="show-card">
+        <div class="show-date">
+          <span class="show-month">${SHOW_MONTHS[d.getUTCMonth()]}</span>
+          <span class="show-day">${d.getUTCDate()}</span>
+          <span class="show-year">${d.getUTCFullYear()}</span>
+        </div>
+        <div class="show-info">
+          <div class="show-title">${esc(item.title)}</div>
+          ${venueLine ? `<div class="show-venue">${esc(venueLine)}</div>` : ''}
+          ${ticket}
+        </div>
+      </div>`;
+}
+
 function renderSections(sections, basePath, accent) {
   return sections
     .filter((s) => (s.items || []).length)
@@ -282,14 +393,25 @@ function renderSections(sections, basePath, accent) {
           if (item.type === 'video') return renderVideoItem(item);
           if (item.type === 'soundcloud') return renderSoundcloudItem(item, accent);
           if (item.type === 'bandsintown') return renderBandsintownItem(item);
+          if (item.type === 'show') return renderShowItem(item, basePath);
+          if (item.type === 'track') return renderTrackItem(item, basePath);
           return renderLinkItem(item, basePath);
         })
         .join('');
       const title = section.title ? `<div class="section-title">${esc(section.title)}</div>` : '';
+      const itemsBlock =
+        section.layout === 'carousel'
+          ? `
+      <div class="carousel-wrap">
+        <button type="button" class="carousel-arrow carousel-prev" aria-label="Scroll left">&#8249;</button>
+        <div class="items carousel">${items}</div>
+        <button type="button" class="carousel-arrow carousel-next" aria-label="Scroll right">&#8250;</button>
+      </div>`
+          : `<div class="items">${items}</div>`;
       return `
     <div class="section">
       ${title}
-      <div class="items">${items}</div>
+      ${itemsBlock}
     </div>`;
     })
     .join('');
@@ -344,6 +466,16 @@ function renderFacebookPixel(facebookPixelId) {
   </script>
   <noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=${id}&ev=PageView&noscript=1" alt="" /></noscript>`;
 }
+
+const CAROUSEL_SCRIPT = `
+  document.querySelectorAll('.carousel-wrap').forEach(function (wrap) {
+    var track = wrap.querySelector('.items.carousel');
+    var prev = wrap.querySelector('.carousel-prev');
+    var next = wrap.querySelector('.carousel-next');
+    if (prev) prev.addEventListener('click', function () { track.scrollBy({ left: -320, behavior: 'smooth' }); });
+    if (next) next.addEventListener('click', function () { track.scrollBy({ left: 320, behavior: 'smooth' }); });
+  });
+`;
 
 const VIDEO_SCRIPT = `
   document.querySelectorAll('.video-play').forEach(function (btn) {
@@ -428,6 +560,7 @@ export function renderPage({
 
   const hasVideo = (sections || []).some((s) => (s.items || []).some((i) => i.type === 'video'));
   const hasBandsintown = (sections || []).some((s) => (s.items || []).some((i) => i.type === 'bandsintown'));
+  const hasCarousel = (sections || []).some((s) => s.layout === 'carousel');
 
   return `<!doctype html>
 <html lang="en">
@@ -471,6 +604,7 @@ export function renderPage({
     <footer>&copy; ${new Date().getFullYear()} ${title}</footer>
   </div>
   ${hasVideo ? `<script>${VIDEO_SCRIPT}</script>` : ''}
+  ${hasCarousel ? `<script>${CAROUSEL_SCRIPT}</script>` : ''}
   ${hasBandsintown ? '<script defer src="https://widgetv3.bandsintown.com/main.min.js"></script>' : ''}
 </body>
 </html>`;

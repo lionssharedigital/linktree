@@ -92,6 +92,10 @@ export const ADMIN_STYLES = `
   }
   .social-row-editor input[type=url] { flex: 1; }
 
+  .track-link-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .track-link-row input[type=text] { flex: 1; }
+  .track-link-row input[type=url] { flex: 2; }
+
   .savebar {
     position: sticky; bottom: 16px; display: flex; align-items: center; gap: 12px;
     background: var(--card); border: 1px solid var(--card-border); border-radius: 14px;
@@ -331,10 +335,20 @@ export function renderAdmin({ data, themes = [], pageUrl, saveUrl, statsUrl, das
       facebookPixelId: initial.facebookPixelId || '',
       sections: (initial.sections || []).map((s) => ({
         title: s.title || '',
+        layout: s.layout === 'carousel' ? 'carousel' : 'list',
         items: (s.items || []).map((it) => {
           if (it.type === 'video') return { type: 'video', title: it.title || '', youtubeId: it.youtubeId || '' };
           if (it.type === 'soundcloud') return { type: 'soundcloud', title: it.title || '', soundcloudUrl: it.soundcloudUrl || '' };
           if (it.type === 'bandsintown') return { type: 'bandsintown', title: it.title || '', bandsintownEmbed: reconstructBandsintownEmbed(it.attrs) };
+          if (it.type === 'show') return {
+            type: 'show', title: it.title || '', date: it.date || '',
+            venue: it.venue || '', location: it.location || '', ticketUrl: it.ticketUrl || '',
+          };
+          if (it.type === 'track') return {
+            type: 'track', title: it.title || '', subtitle: it.subtitle || '',
+            image: it.image || '', imageUpload: null,
+            links: (it.links || []).map((l) => ({ label: l.label || '', url: l.url || '', slug: l.slug || '' })),
+          };
           return {
             type: 'link', style: it.style === 'featured' ? 'featured' : 'classic',
             title: it.title || '', url: it.url || '', emoji: it.emoji || '',
@@ -428,10 +442,15 @@ export function renderAdmin({ data, themes = [], pageUrl, saveUrl, statsUrl, das
         header.className = 'section-header';
         header.innerHTML = \`
           <input type="text" placeholder="Section title (optional)" maxlength="60" value="\${escAttr(section.title)}" />
+          <select data-role="layout" title="Layout">
+            <option value="list"\${section.layout === 'list' ? ' selected' : ''}>List</option>
+            <option value="carousel"\${section.layout === 'carousel' ? ' selected' : ''}>Carousel</option>
+          </select>
           <button type="button" class="icon-btn" data-action="sec-up">↑</button>
           <button type="button" class="icon-btn" data-action="sec-down">↓</button>
           <button type="button" class="icon-btn danger" data-action="sec-remove">Remove section</button>\`;
         header.querySelector('input').addEventListener('input', (e) => { section.title = e.target.value; });
+        header.querySelector('[data-role="layout"]').addEventListener('change', (e) => { section.layout = e.target.value; });
         header.querySelector('[data-action="sec-up"]').addEventListener('click', () => {
           if (si === 0) return;
           [state.sections[si - 1], state.sections[si]] = [state.sections[si], state.sections[si - 1]];
@@ -458,7 +477,9 @@ export function renderAdmin({ data, themes = [], pageUrl, saveUrl, statsUrl, das
           <button type="button" class="add-btn" data-action="add-link">+ Add link</button>
           <button type="button" class="add-btn" data-action="add-video">+ Add YouTube video</button>
           <button type="button" class="add-btn" data-action="add-soundcloud">+ Add SoundCloud track</button>
-          <button type="button" class="add-btn" data-action="add-bandsintown">+ Add Bandsintown shows</button>\`;
+          <button type="button" class="add-btn" data-action="add-bandsintown">+ Add Bandsintown shows</button>
+          <button type="button" class="add-btn" data-action="add-show">+ Add show</button>
+          <button type="button" class="add-btn" data-action="add-track">+ Add track card</button>\`;
         addRow.querySelector('[data-action="add-link"]').addEventListener('click', () => {
           section.items.push({ type: 'link', style: 'classic', title: '', url: '', emoji: '', image: '', imageUpload: null, slug: '' });
           renderSections();
@@ -473,6 +494,14 @@ export function renderAdmin({ data, themes = [], pageUrl, saveUrl, statsUrl, das
         });
         addRow.querySelector('[data-action="add-bandsintown"]').addEventListener('click', () => {
           section.items.push({ type: 'bandsintown', title: '', bandsintownEmbed: '' });
+          renderSections();
+        });
+        addRow.querySelector('[data-action="add-show"]').addEventListener('click', () => {
+          section.items.push({ type: 'show', title: '', date: '', venue: '', location: '', ticketUrl: '' });
+          renderSections();
+        });
+        addRow.querySelector('[data-action="add-track"]').addEventListener('click', () => {
+          section.items.push({ type: 'track', title: '', subtitle: '', image: '', imageUpload: null, links: [{ label: '', url: '', slug: '' }] });
           renderSections();
         });
         block.appendChild(addRow);
@@ -522,6 +551,91 @@ export function renderAdmin({ data, themes = [], pageUrl, saveUrl, statsUrl, das
             <button type="button" class="icon-btn" data-action="down">↓</button>
             <button type="button" class="icon-btn danger" data-action="remove">Remove</button>
           </div>\`;
+      } else if (item.type === 'show') {
+        card.innerHTML = \`
+          <span class="item-type-badge">🎫 Show</span>
+          <div class="fields">
+            <input type="text" class="full" placeholder="Tour / event title" maxlength="80" value="\${escAttr(item.title)}" data-field="title" />
+            <input type="date" class="full" value="\${escAttr(item.date)}" data-field="date" />
+            <input type="text" class="full" placeholder="Venue (optional)" maxlength="80" value="\${escAttr(item.venue)}" data-field="venue" />
+            <input type="text" class="full" placeholder="City, Country (optional)" maxlength="80" value="\${escAttr(item.location)}" data-field="location" />
+            <input type="url" class="full" placeholder="Ticket URL (optional — leave blank for TBA/sold out)" value="\${escAttr(item.ticketUrl)}" data-field="ticketUrl" />
+          </div>
+          <div class="hint">Only shown while the date is today or later — no need to remove past shows.</div>
+          <div class="controls">
+            <button type="button" class="icon-btn" data-action="up">↑</button>
+            <button type="button" class="icon-btn" data-action="down">↓</button>
+            <button type="button" class="icon-btn danger" data-action="remove">Remove</button>
+          </div>\`;
+      } else if (item.type === 'track') {
+        const preview = item.imageUpload ? item.imageUpload.dataUrl : item.image;
+        const linksHtml = item.links
+          .map(
+            (link, li) => \`
+          <div class="track-link-row" data-li="\${li}">
+            <input type="text" placeholder="Label (e.g. Spotify)" maxlength="40" value="\${escAttr(link.label)}" data-role="label" />
+            <input type="url" placeholder="https://..." value="\${escAttr(link.url)}" data-role="url" />
+            <button type="button" class="icon-btn danger" data-role="remove-link">✕</button>
+          </div>\`
+          )
+          .join('');
+        card.innerHTML = \`
+          <span class="item-type-badge">💿 Track</span>
+          <div class="fields">
+            <input type="text" class="full" placeholder="Title" maxlength="80" value="\${escAttr(item.title)}" data-field="title" />
+            <input type="text" class="full" placeholder="Subtitle (e.g. artist name, optional)" maxlength="80" value="\${escAttr(item.subtitle)}" data-field="subtitle" />
+            <div class="thumb-row">
+              \${preview ? \`<img src="\${escAttr(preview)}" alt="" />\` : ''}
+              <input type="file" accept="image/png,image/jpeg,image/webp" data-role="image-input" />
+              \${preview ? '<button type="button" class="icon-btn" data-action="remove-image">Remove image</button>' : ''}
+            </div>
+            <div class="full" data-role="track-links">\${linksHtml}</div>
+            <button type="button" class="add-btn full" data-role="add-link">+ Add platform link</button>
+          </div>
+          <div class="controls">
+            <button type="button" class="icon-btn" data-action="up">↑</button>
+            <button type="button" class="icon-btn" data-action="down">↓</button>
+            <button type="button" class="icon-btn danger" data-action="remove">Remove</button>
+          </div>\`;
+
+        const trackFileInput = card.querySelector('[data-role="image-input"]');
+        trackFileInput.addEventListener('change', (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          if (file.size > 2 * 1024 * 1024) {
+            setStatus('Image must be under 2 MB.', 'err');
+            e.target.value = '';
+            return;
+          }
+          const reader = new FileReader();
+          reader.onload = () => {
+            item.imageUpload = { filename: file.name, dataUrl: reader.result };
+            item.image = '';
+            renderSections();
+          };
+          reader.readAsDataURL(file);
+        });
+        const trackRemoveImageBtn = card.querySelector('[data-action="remove-image"]');
+        if (trackRemoveImageBtn) {
+          trackRemoveImageBtn.addEventListener('click', () => {
+            item.image = '';
+            item.imageUpload = null;
+            renderSections();
+          });
+        }
+        card.querySelectorAll('.track-link-row').forEach((row) => {
+          const li = Number(row.dataset.li);
+          row.querySelector('[data-role="label"]').addEventListener('input', (e) => { item.links[li].label = e.target.value; });
+          row.querySelector('[data-role="url"]').addEventListener('input', (e) => { item.links[li].url = e.target.value; });
+          row.querySelector('[data-role="remove-link"]').addEventListener('click', () => {
+            item.links.splice(li, 1);
+            renderSections();
+          });
+        });
+        card.querySelector('[data-role="add-link"]').addEventListener('click', () => {
+          item.links.push({ label: '', url: '', slug: '' });
+          renderSections();
+        });
       } else {
         const preview = item.imageUpload ? item.imageUpload.dataUrl : item.image;
         const style = item.style === 'featured' ? 'featured' : 'classic';
@@ -708,7 +822,7 @@ export function renderAdmin({ data, themes = [], pageUrl, saveUrl, statsUrl, das
     });
 
     el('add-section').addEventListener('click', () => {
-      state.sections.push({ title: '', items: [] });
+      state.sections.push({ title: '', layout: 'list', items: [] });
       renderSections();
     });
 
@@ -789,6 +903,17 @@ export function renderAdmin({ data, themes = [], pageUrl, saveUrl, statsUrl, das
               if (!item.bandsintownEmbed.trim()) throw new Error('Every Bandsintown embed needs the embed code pasted in.');
               if (!/data-artist-name/.test(item.bandsintownEmbed) || !/data-app-id/.test(item.bandsintownEmbed)) {
                 throw new Error("That doesn't look like a Bandsintown embed code — paste the whole snippet Bandsintown gives you.");
+              }
+            } else if (item.type === 'show') {
+              if (!item.title.trim()) throw new Error('Every show needs a title.');
+              if (!/^\d{4}-\d{2}-\d{2}$/.test(item.date)) throw new Error('"' + item.title + '" needs a date.');
+              if (item.ticketUrl) { try { new URL(item.ticketUrl); } catch { throw new Error('"' + item.title + '" has an invalid ticket URL.'); } }
+            } else if (item.type === 'track') {
+              if (!item.title.trim()) throw new Error('Every track needs a title.');
+              if (!item.links.length) throw new Error('"' + item.title + '" needs at least one platform link.');
+              for (const link of item.links) {
+                if (!link.label.trim()) throw new Error('"' + item.title + '" has a link with no label.');
+                try { new URL(link.url); } catch { throw new Error('"' + item.title + '" — ' + link.label + ' has an invalid URL.'); }
               }
             }
           }

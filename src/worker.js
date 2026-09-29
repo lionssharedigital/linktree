@@ -7,6 +7,7 @@ import {
   parseYoutubeId,
   parseSoundcloudUrl,
   parseBandsintownEmbed,
+  parseShowDate,
   flattenLinkItems,
   nextUniqueSlug,
   PAGE_SLUG_RE,
@@ -306,6 +307,55 @@ async function sanitizeAndPersistContent(app, pageSlug, rawSections, rawSocialLi
         continue;
       }
 
+      if (rawItem.type === 'track') {
+        const title = String(rawItem.title || '').trim();
+        if (!title) throw httpError(400, 'Every track needs a title');
+        const subtitle = String(rawItem.subtitle || '').trim().slice(0, 80);
+        // Filename key only — doesn't become a click-tracking slug, but still
+        // deduped through the same seenSlugs set so uploads never collide.
+        // Derived from the title (tracks have no stable slug of their own
+        // the way link items do), so renaming a track before re-uploading
+        // its image can leave the old file orphaned in R2 — a minor storage
+        // cost, not a correctness issue.
+        const imageKey = nextUniqueSlug(slugify(title) || 'track', seenSlugs);
+
+        let image = sanitizeExistingImage(pageSlug, rawItem.image);
+        if (rawItem.imageUpload && rawItem.imageUpload.dataUrl) {
+          image = await saveLinkImageUpload(app, pageSlug, rawItem.imageUpload, imageKey, previousItemsBySlug.get(imageKey)?.image);
+          images[imageKey] = image;
+        }
+
+        const trackLinks = [];
+        for (const rawLink of rawItem.links || []) {
+          const label = String(rawLink.label || '').trim().slice(0, 40);
+          if (!label) throw httpError(400, `"${title}" has a link with no label`);
+          const url = parseLinkUrl(rawLink.url, `"${title}" — ${label}`);
+          const rawLinkSlug = rawLink.slug ? slugify(String(rawLink.slug).trim().slice(0, 60)) : slugify(label);
+          trackLinks.push({ label, url, slug: nextUniqueSlug(rawLinkSlug, seenSlugs) });
+        }
+        if (!trackLinks.length) throw httpError(400, `"${title}" needs at least one platform link`);
+
+        items.push({ type: 'track', title: title.slice(0, 80), subtitle, image, links: trackLinks });
+        continue;
+      }
+
+      if (rawItem.type === 'show') {
+        const title = String(rawItem.title || '').trim();
+        if (!title) throw httpError(400, 'Every show needs a title');
+        const date = parseShowDate(rawItem.date);
+        if (!date) throw httpError(400, `"${title}" has an invalid date (use YYYY-MM-DD)`);
+        const venue = String(rawItem.venue || '').trim().slice(0, 80);
+        const location = String(rawItem.location || '').trim().slice(0, 80);
+        const ticketUrl = rawItem.ticketUrl ? parseLinkUrl(rawItem.ticketUrl, `"${title}" ticket link`) : '';
+        let slug = '';
+        if (ticketUrl) {
+          const rawSlug = rawItem.slug ? slugify(String(rawItem.slug).trim().slice(0, 60)) : slugify(title);
+          slug = nextUniqueSlug(rawSlug, seenSlugs);
+        }
+        items.push({ type: 'show', title: title.slice(0, 80), date, venue, location, ticketUrl, slug });
+        continue;
+      }
+
       const title = String(rawItem.title || '').trim();
       if (!title) throw httpError(400, 'Every link needs a title');
       const url = parseLinkUrl(rawItem.url, `"${title}"`);
@@ -322,7 +372,11 @@ async function sanitizeAndPersistContent(app, pageSlug, rawSections, rawSocialLi
 
       items.push({ type: 'link', style, title: title.slice(0, 80), url, emoji, image, slug: unique });
     }
-    sections.push({ title: String(rawSection.title || '').trim().slice(0, 60), items });
+    sections.push({
+      title: String(rawSection.title || '').trim().slice(0, 60),
+      layout: rawSection.layout === 'carousel' ? 'carousel' : 'list',
+      items,
+    });
   }
 
   const socialLinks = [];

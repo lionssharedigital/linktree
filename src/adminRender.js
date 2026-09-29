@@ -315,6 +315,7 @@ export function renderAdmin({ data, pageUrl, saveUrl, statsUrl, dashboardUrl, ge
         items: (s.items || []).map((it) => {
           if (it.type === 'video') return { type: 'video', title: it.title || '', youtubeId: it.youtubeId || '' };
           if (it.type === 'soundcloud') return { type: 'soundcloud', title: it.title || '', soundcloudUrl: it.soundcloudUrl || '' };
+          if (it.type === 'bandsintown') return { type: 'bandsintown', title: it.title || '', artistName: it.artistName || '' };
           return {
             type: 'link', style: it.style === 'featured' ? 'featured' : 'classic',
             title: it.title || '', url: it.url || '', emoji: it.emoji || '',
@@ -427,7 +428,8 @@ export function renderAdmin({ data, pageUrl, saveUrl, statsUrl, dashboardUrl, ge
         addRow.innerHTML = \`
           <button type="button" class="add-btn" data-action="add-link">+ Add link</button>
           <button type="button" class="add-btn" data-action="add-video">+ Add YouTube video</button>
-          <button type="button" class="add-btn" data-action="add-soundcloud">+ Add SoundCloud track</button>\`;
+          <button type="button" class="add-btn" data-action="add-soundcloud">+ Add SoundCloud track</button>
+          <button type="button" class="add-btn" data-action="add-bandsintown">+ Add Bandsintown shows</button>\`;
         addRow.querySelector('[data-action="add-link"]').addEventListener('click', () => {
           section.items.push({ type: 'link', style: 'classic', title: '', url: '', emoji: '', image: '', imageUpload: null, slug: '' });
           renderSections();
@@ -438,6 +440,10 @@ export function renderAdmin({ data, pageUrl, saveUrl, statsUrl, dashboardUrl, ge
         });
         addRow.querySelector('[data-action="add-soundcloud"]').addEventListener('click', () => {
           section.items.push({ type: 'soundcloud', title: '', soundcloudUrl: '' });
+          renderSections();
+        });
+        addRow.querySelector('[data-action="add-bandsintown"]').addEventListener('click', () => {
+          section.items.push({ type: 'bandsintown', title: '', artistName: '' });
           renderSections();
         });
         block.appendChild(addRow);
@@ -468,6 +474,18 @@ export function renderAdmin({ data, pageUrl, saveUrl, statsUrl, dashboardUrl, ge
           <div class="fields">
             <input type="text" class="full" placeholder="Caption (optional)" maxlength="80" value="\${escAttr(item.title)}" data-field="title" />
             <input type="url" class="full" placeholder="https://soundcloud.com/artist/track" value="\${escAttr(item.soundcloudUrl)}" data-field="soundcloudUrl" />
+          </div>
+          <div class="controls">
+            <button type="button" class="icon-btn" data-action="up">↑</button>
+            <button type="button" class="icon-btn" data-action="down">↓</button>
+            <button type="button" class="icon-btn danger" data-action="remove">Remove</button>
+          </div>\`;
+      } else if (item.type === 'bandsintown') {
+        card.innerHTML = \`
+          <span class="item-type-badge">🎤 Bandsintown</span>
+          <div class="fields">
+            <input type="text" class="full" placeholder="Caption (optional)" maxlength="80" value="\${escAttr(item.title)}" data-field="title" />
+            <input type="text" class="full" placeholder="Bandsintown artist name" value="\${escAttr(item.artistName)}" data-field="artistName" />
           </div>
           <div class="controls">
             <button type="button" class="icon-btn" data-action="up">↑</button>
@@ -735,6 +753,8 @@ export function renderAdmin({ data, pageUrl, saveUrl, statsUrl, dashboardUrl, ge
               if (!item.youtubeId.trim()) throw new Error('Every video needs a YouTube URL or ID.');
             } else if (item.type === 'soundcloud') {
               if (!item.soundcloudUrl.trim()) throw new Error('Every SoundCloud embed needs a track/playlist URL.');
+            } else if (item.type === 'bandsintown') {
+              if (!item.artistName.trim()) throw new Error('Every Bandsintown embed needs an artist name.');
             }
           }
         }

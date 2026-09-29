@@ -6,6 +6,7 @@ import {
   slugify,
   parseYoutubeId,
   parseSoundcloudUrl,
+  parseBandsintownArtistName,
   flattenLinkItems,
   nextUniqueSlug,
   PAGE_SLUG_RE,
@@ -256,6 +257,13 @@ async function sanitizeAndPersistContent(app, pageSlug, rawSections, rawSocialLi
         const soundcloudUrl = parseSoundcloudUrl(rawItem.soundcloudUrl);
         if (!soundcloudUrl) throw httpError(400, `"${rawItem.title || 'Untitled track'}" has an invalid SoundCloud URL`);
         items.push({ type: 'soundcloud', title: String(rawItem.title || '').trim().slice(0, 80), soundcloudUrl });
+        continue;
+      }
+
+      if (rawItem.type === 'bandsintown') {
+        const artistName = parseBandsintownArtistName(rawItem.artistName);
+        if (!artistName) throw httpError(400, 'Bandsintown embed needs an artist name');
+        items.push({ type: 'bandsintown', title: String(rawItem.title || '').trim().slice(0, 80), artistName });
         continue;
       }
 

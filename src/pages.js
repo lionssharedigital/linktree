@@ -73,6 +73,14 @@ export function parseSoundcloudUrl(input) {
   }
 }
 
+// Bandsintown artist names are opaque display strings (not URLs) used to
+// build the embed widget, so this just trims stray "@"/whitespace/length
+// rather than validating a format Bandsintown itself doesn't document.
+export function parseBandsintownArtistName(input) {
+  const str = String(input || '').trim().replace(/^@/, '');
+  return str ? str.slice(0, 80) : null;
+}
+
 // Old flat `links: [...]` files (pre-sections) get wrapped into a single
 // untitled section so imported legacy content keeps working.
 function migrateToSections(data) {
@@ -104,6 +112,9 @@ function normalizeSections(sections, seenSlugs) {
       }
       if (item.type === 'soundcloud') {
         return { type: 'soundcloud', title: item.title || '', soundcloudUrl: item.soundcloudUrl || '' };
+      }
+      if (item.type === 'bandsintown') {
+        return { type: 'bandsintown', title: item.title || '', artistName: item.artistName || '' };
       }
       const rawSlug = item.slug ? slugify(item.slug) : slugify(item.title || '');
       return {

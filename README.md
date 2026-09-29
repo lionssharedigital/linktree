@@ -70,14 +70,17 @@ then give its artist access again from the dashboard.
     click-to-play YouTube embed, or
   - a **SoundCloud embed**: `title` (caption) and `soundcloudUrl` (a track,
     playlist, or user URL), rendered as SoundCloud's own inline player widget
-    tinted with your accent color.
+    tinted with your accent color, or
+  - a **Bandsintown embed**: `title` (caption) and `artistName` (the artist's
+    name as registered on Bandsintown), rendered as Bandsintown's own
+    "upcoming shows" widget, showing the next few dates with venue, city, and
+    a tickets link.
 
   Separately, a top-level `socialLinks` array (`icon`, `url`, auto-generated
-  `slug`) renders as a single row of icon-only buttons at the very bottom
-  of the page, above the footer — for Spotify/Instagram/YouTube/etc. profile
-  links. Icons come from a built-in library (see
-  [`src/icons.js`](src/icons.js)); `/admin` has a dropdown listing every
-  available one.
+  `slug`) renders as a single row of icon-only buttons just below the bio
+  (above any sections) — for Spotify/Instagram/YouTube/etc. profile links.
+  Icons come from a built-in library (see [`src/icons.js`](src/icons.js));
+  `/admin` has a dropdown listing every available one.
 
   See [`templates/starter.json`](templates/starter.json) — what every new
   page starts from — for the shape.
@@ -133,8 +136,9 @@ then give its artist access again from the dashboard.
   [Page editor](#page-editor) below.
 - **Click tracking**: every link button goes through `/<page>/go/<slug>`,
   which issues a `302` to the real URL and, after responding, records the
-  click (timestamp, slug, referrer, user-agent) in D1. Video and SoundCloud
-  embeds aren't tracked this way — they play inline and never redirect.
+  click (timestamp, slug, referrer, user-agent) in D1. Video, SoundCloud,
+  and Bandsintown embeds aren't tracked this way — they render inline and
+  never redirect.
 - **Click stats** for a page are at `/admin/pages/<slug>/stats`, visible to
   that page's editors and admins.
 - **OG image**: every time a page is saved, the editor draws a 1200×630
@@ -149,11 +153,16 @@ opt in**: YouTube's own servers when a visitor presses play on a video
 embed (unavoidable — that's what "embed a video" means), SoundCloud's own
 servers to load its player widget for any SoundCloud embed you add
 (unavoidable for the same reason — the widget iframe loads lazily, only
-once it scrolls near the viewport), and Google's gtag.js and/or Meta's
+once it scrolls near the viewport), Bandsintown's own servers to load its
+"upcoming shows" widget for any Bandsintown embed you add (this one is
+heavier than the others — it's Bandsintown's own JS widget bundle, not a
+lazy iframe, since Bandsintown's public events API requires a
+pre-approved partner key we don't have; the script only loads on pages
+that actually use a Bandsintown block), and Google's gtag.js and/or Meta's
 fbevents.js if you fill in a Google Analytics, Google Ads, or Meta Pixel ID
-in `/admin`. All four are blank/off by default except that a SoundCloud
-embed, once you add one, always loads SoundCloud's widget (there's no way
-to embed a SoundCloud player without it).
+in `/admin`. All five are blank/off by default except that a SoundCloud or
+Bandsintown embed, once you add one, always loads that platform's widget
+(there's no way to embed either without it).
 
 ## Local development
 
@@ -188,8 +197,9 @@ From it they can:
 - Within a section, add, remove, reorder, and edit **links** (title, URL,
   emoji or an uploaded thumbnail image, and an optional custom slug),
   **YouTube videos** (paste any YouTube URL or a bare video ID — it's
-  normalized automatically), or **SoundCloud embeds** (paste any
-  soundcloud.com track/playlist/user URL)
+  normalized automatically), **SoundCloud embeds** (paste any
+  soundcloud.com track/playlist/user URL), or **Bandsintown embeds**
+  (enter the artist's Bandsintown name to show their next few shows)
 - Add, remove, and reorder **social icons** — pick a platform from a
   dropdown (Spotify, Instagram, YouTube, SoundCloud, TikTok, X, Facebook,
   Apple Music, Bandcamp, Twitch, Discord, LinkedIn, Telegram, WhatsApp,
@@ -296,10 +306,11 @@ reset links. To sign **everyone** out at once, set a new secret with
 
 Built so far: multi-artist pages with admin/artist logins and invite
 links, sections, classic and featured link cards, YouTube video embeds,
-SoundCloud track/playlist embeds, a social icon row, custom
-colors/fonts/corners, avatar/favicon/OG image uploads, SEO and
-social-preview overrides, optional Google/Meta analytics, and UTM campaign
-tagging on every outbound click.
+SoundCloud track/playlist embeds, Bandsintown upcoming-shows embeds, a
+social icon row (shown just below the bio), custom colors/fonts/corners,
+avatar/favicon/OG image uploads, SEO and social-preview overrides,
+optional Google/Meta analytics, and UTM campaign tagging on every outbound
+click.
 
 Not yet built (each needs a real design/provider decision before it's
 worth building, rather than a half-working stub):

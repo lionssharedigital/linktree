@@ -146,6 +146,14 @@ export const BASE_STYLES = `
     margin-top: 8px; font-size: 0.85rem; font-weight: 500; color: var(--fg); text-align: center;
   }
 
+  .bandsintown-embed {
+    width: 100%; border-radius: 14px; overflow: hidden; padding: 4px;
+    background: var(--card); border: 1px solid var(--card-border); box-shadow: var(--shadow);
+  }
+  .bandsintown-caption {
+    margin-top: 8px; font-size: 0.85rem; font-weight: 500; color: var(--fg); text-align: center;
+  }
+
   .social-row {
     width: 100%; display: flex; flex-wrap: wrap; justify-content: center; gap: 12px;
   }
@@ -220,6 +228,30 @@ function renderSoundcloudItem(item, accent) {
       </div>`;
 }
 
+function renderBandsintownItem(item) {
+  if (!item.artistName) return '';
+  const caption = item.title
+    ? `<div class="bandsintown-caption">${esc(item.title)}</div>`
+    : '';
+  return `
+      <div>
+        <div class="bandsintown-embed">
+          <a
+            class="bit-widget-initializer"
+            data-artist-name="${esc(item.artistName)}"
+            data-display-limit="4"
+            data-display-local-dates="false"
+            data-display-past-dates="false"
+            data-auto-style="true"
+            data-display-start-time="false"
+            data-date-format="MMM D"
+            data-display-lineup="false"
+          ></a>
+        </div>
+        ${caption}
+      </div>`;
+}
+
 function renderSections(sections, basePath, accent) {
   return sections
     .filter((s) => (s.items || []).length)
@@ -228,6 +260,7 @@ function renderSections(sections, basePath, accent) {
         .map((item) => {
           if (item.type === 'video') return renderVideoItem(item);
           if (item.type === 'soundcloud') return renderSoundcloudItem(item, accent);
+          if (item.type === 'bandsintown') return renderBandsintownItem(item);
           return renderLinkItem(item, basePath);
         })
         .join('');
@@ -353,6 +386,7 @@ export function renderPage({
   }
 
   const hasVideo = (sections || []).some((s) => (s.items || []).some((i) => i.type === 'video'));
+  const hasBandsintown = (sections || []).some((s) => (s.items || []).some((i) => i.type === 'bandsintown'));
 
   return `<!doctype html>
 <html lang="en">
@@ -390,12 +424,13 @@ export function renderPage({
       }
       <h1>${title}</h1>
       <p class="bio">${description}</p>
-      ${renderSections(sections || [], basePath, accent)}
       ${renderSocialRow(socialLinks || [], basePath)}
+      ${renderSections(sections || [], basePath, accent)}
     </div>
     <footer>&copy; ${new Date().getFullYear()} ${title}</footer>
   </div>
   ${hasVideo ? `<script>${VIDEO_SCRIPT}</script>` : ''}
+  ${hasBandsintown ? '<script defer src="https://widgetv3.bandsintown.com/main.min.js"></script>' : ''}
 </body>
 </html>`;
 }

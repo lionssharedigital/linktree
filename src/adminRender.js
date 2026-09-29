@@ -906,7 +906,7 @@ export function renderAdmin({ data, themes = [], pageUrl, saveUrl, statsUrl, das
               }
             } else if (item.type === 'show') {
               if (!item.title.trim()) throw new Error('Every show needs a title.');
-              if (!/^\d{4}-\d{2}-\d{2}$/.test(item.date)) throw new Error('"' + item.title + '" needs a date.');
+              if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(item.date)) throw new Error('"' + item.title + '" needs a date.');
               if (item.ticketUrl) { try { new URL(item.ticketUrl); } catch { throw new Error('"' + item.title + '" has an invalid ticket URL.'); } }
             } else if (item.type === 'track') {
               if (!item.title.trim()) throw new Error('Every track needs a title.');

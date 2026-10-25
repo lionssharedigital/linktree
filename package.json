@@ -10,7 +10,7 @@
     "og": "node scripts/generate-og.mjs"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.23.4"
   },
   "dependencies": {
     "sharp": "^0.33.5"
